@@ -24,16 +24,26 @@ def _demote_accessor(acc, k):
     return accessor(lambda offs: acc[offs][k]) if _is_column_accessor(acc) else acc
 
 
+def _unzip_column(col):
+    return (
+        tuple(np.array([x[i] for x in col]) for i in range(len(col[0])))
+        if isinstance(col[0], tuple)
+        else col
+    )
+
+
 def polymorhic_stencil(func):
     def wrapper(*accs):
         if not _has_column_accessors(accs):
             return func(*accs)
 
-        return np.array(
-            [
-                func(*(_demote_accessor(acc, k) for acc in accs))
-                for k in range(_column_size(accs))
-            ]
+        return _unzip_column(
+            np.array(
+                [
+                    func(*(_demote_accessor(acc, k) for acc in accs))
+                    for k in range(_column_size(accs))
+                ]
+            )
         )
 
     return wrapper
