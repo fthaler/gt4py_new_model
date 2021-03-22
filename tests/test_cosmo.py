@@ -6,13 +6,13 @@ import pytest
 from gt4py_new_model import *
 
 
-@polimorhic_stencil
+@polymorhic_stencil
 def laplacian(inp):
     return -4 * inp[I, J] + (inp[I + 1] + inp[I - 1] + inp[J + 1] + inp[J - 1])
 
 
 def hdiff_flux(dim):
-    @polimorhic_stencil
+    @polymorhic_stencil
     def res(inp):
         lap = lift(laplacian)(inp)
         uflux = lap[dim] - lap[dim + 1]
@@ -21,7 +21,7 @@ def hdiff_flux(dim):
     return res
 
 
-@polimorhic_stencil
+@polymorhic_stencil
 def hdiff(inp, coeff):
     flx = lift(hdiff_flux(I))(inp)
     fly = lift(hdiff_flux(J))(inp)

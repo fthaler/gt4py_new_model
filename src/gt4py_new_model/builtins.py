@@ -24,7 +24,7 @@ def _demote_accessor(acc, k):
     return accessor(lambda offs: acc[offs][k]) if _is_column_accessor(acc) else acc
 
 
-def polimorhic_stencil(func):
+def polymorhic_stencil(func):
     def wrapper(*accs):
         if not _has_column_accessors(accs):
             return func(*accs)
