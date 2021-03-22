@@ -6,7 +6,7 @@ from gt4py_new_model import *
 
 
 def test_identity():
-    @stencil
+    @polimorhic_stencil
     def identity(inp):
         return inp[I, J, K]
 
@@ -22,7 +22,7 @@ def test_identity():
     assert np.all(np.asarray(inp) == np.asarray(out))
 
 
-@stencil
+@polimorhic_stencil
 def shift(inp):
     return inp[I + 1]
 
@@ -40,7 +40,7 @@ def test_shift():
     assert np.all(np.asarray(inp)[1:, :, :] == np.asarray(out)[:-1, :, :])
 
 
-@stencil
+@polimorhic_stencil
 def scale(inp):
     return 2 * inp[I]
 
@@ -59,7 +59,7 @@ def test_scale():
 
 
 def test_shift_scale():
-    @stencil
+    @polimorhic_stencil
     def shift_scale(inp):
         x = lift(shift)(inp)
         return scale(x)
@@ -77,7 +77,7 @@ def test_shift_scale():
 
 
 def test_multi_shift_scale():
-    @stencil
+    @polimorhic_stencil
     def shift_scale(inp):
         x = lift(shift)(inp)
         y = lift(scale)(x)
@@ -101,13 +101,9 @@ def test_multi_shift_scale():
 
 
 def test_cumsum():
-    @scaniter
-    def cumsumiter(state, inp):
+    @forward(init=0)
+    def cumsum(state, inp):
         return state + inp[K]
-
-    @stencil
-    def cumsum(inp):
-        return scan(cumsumiter, True, 0, inp)
 
     @fencil
     def apply(out, inp, domain):
@@ -122,9 +118,9 @@ def test_cumsum():
 
 
 def test_conditional():
-    @stencil
+    @polimorhic_stencil
     def foo(x, y, z):
-        return if_then_else(x[I], y[I], z[I])
+        return y[I] if x[I] else z[I]
 
     @fencil
     def apply(out, x, y, z, domain):
@@ -143,13 +139,13 @@ def test_conditional():
 
 
 def test_tuple_lifting():
-    @stencil
+    @polimorhic_stencil
     def foo(x, y):
         return x[I], y[I]
 
-    @stencil
+    @polimorhic_stencil
     def bar(x, y):
-        xx, yy = lift(foo, 2)(x, y)
+        xx, yy = lift(foo)(x, y)
         return xx[I] + yy[I]
 
     @fencil

@@ -3,8 +3,8 @@ from importlib.metadata import version
 __version__ = version(__package__)
 
 from .dimensions import I, J, K
-from .application import apply_stencil, domain, fencil, lift, scaniter, stencil
-from .builtins import if_then_else, scan
+from .application import apply_stencil, domain, fencil, lift, stencil
+from .builtins import forward, backward, polimorhic_stencil
 from .storage import storage, index
 
 __all__ = [
@@ -15,10 +15,10 @@ __all__ = [
     "domain",
     "fencil",
     "lift",
-    "scaniter",
     "stencil",
-    "if_then_else",
-    "scan",
+    "polimorhic_stencil",
     "storage",
     "index",
+    "forward",
+    "backward",
 ]

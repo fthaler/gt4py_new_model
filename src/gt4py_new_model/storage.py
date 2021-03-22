@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from .accessors import ArrayColumnAccessor, IndexColumnAccessor
+from .accessors import array_column_accessor, index_column_accessor
 
 
 @dataclass(frozen=True)
@@ -15,7 +15,7 @@ class ArrayStorage:
         return self.array
 
     def _k_column_accessor(self, i, j, k_size):
-        return ArrayColumnAccessor(
+        return array_column_accessor(
             array=self.array,
             dimensions=self.dimensions,
             focus=tuple(
@@ -49,11 +49,9 @@ class IndexStorage:
             focus += i
         elif self.index_dimension == "j":
             focus += j
-        return IndexColumnAccessor(
+        return index_column_accessor(
             dimension=self.index_dimension,
             focus=focus,
-            start=self.origin[axis],
-            end=self.origin[axis] + self.shape[axis],
             column="k",
             size=k_size,
         )
