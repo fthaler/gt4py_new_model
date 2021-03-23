@@ -74,9 +74,9 @@ def scan(func, is_forward, init):
     return wrapper
 
 
-def _decoroator(is_forward):
+def _decorator(is_forward):
     def decorator(*args, init=None):
-        if len(args):
+        if args:
             assert len(args) == 1
             assert init == None
             return scan(args[0], is_forward=is_forward, init=None)
@@ -89,5 +89,5 @@ def _decoroator(is_forward):
     return decorator
 
 
-forward = _decoroator(True)
-backward = _decoroator(False)
+forward = _decorator(True)
+backward = _decorator(False)
