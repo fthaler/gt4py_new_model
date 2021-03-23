@@ -22,6 +22,7 @@ class Dimension:
             )
         return Dimension(dimension=self.dimension, offset=self.offset - other)
 
+    @staticmethod
     def collect(*indices: "Dimension") -> tuple["Dimension"]:
         res = dict[str, int]()
         for i in indices:

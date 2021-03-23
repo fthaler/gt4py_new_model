@@ -6,22 +6,25 @@ import pytest
 from gt4py_new_model import *
 
 
-@stencil
+@polymorhic_stencil
 def laplacian(inp):
     return -4 * inp[I, J] + (inp[I + 1] + inp[I - 1] + inp[J + 1] + inp[J - 1])
 
 
-@stencil
-def hdiff_flux(inp, dim):
-    lap = lift(laplacian)(inp)
-    uflux = lap[dim] - lap[dim + 1]
-    return if_then_else(uflux * (inp[dim + 1] - inp[dim]) > 0, 0, uflux)
+def hdiff_flux(dim):
+    @polymorhic_stencil
+    def res(inp):
+        lap = lift(laplacian)(inp)
+        uflux = lap[dim] - lap[dim + 1]
+        return 0 if uflux * (inp[dim + 1] - inp[dim]) > 0 else uflux
+
+    return res
 
 
-@stencil
+@polymorhic_stencil
 def hdiff(inp, coeff):
-    flx = lift(hdiff_flux)(inp, I)
-    fly = lift(hdiff_flux)(inp, J)
+    flx = lift(hdiff_flux(I))(inp)
+    fly = lift(hdiff_flux(J))(inp)
     return inp[I, J] - coeff[I, J] * (flx[I] - flx[I - 1] + fly[J] - fly[J - 1])
 
 
@@ -77,21 +80,21 @@ def tridiag_reference():
     return a, b, c, d, x
 
 
-@scaniter
-def tridiag_forward(state, k, a, b, c, d) -> tuple[Any, Any]:
-    cp_km1, dp_km1 = state
-    if k.on_level(0):
+@forward
+def tridiag_forward(state, a, b, c, d):
+    if state is None:
         cp_k = c[K] / b[K]
         dp_k = d[K] / b[K]
     else:
+        cp_km1, dp_km1 = state
         cp_k = c[K] / (b[K] - a[K] * cp_km1)
         dp_k = (d[K] - a[K] * dp_km1) / (b[K] - a[K] * cp_km1)
     return cp_k, dp_k
 
 
-@scaniter
-def tridiag_backward(x_kp1, k, cp, dp):
-    if k.on_level(-1):
+@backward
+def tridiag_backward(x_kp1, cp, dp):
+    if x_kp1 is None:
         x_k = dp[K]
     else:
         x_k = dp[K] - cp[K] * x_kp1
@@ -99,15 +102,15 @@ def tridiag_backward(x_kp1, k, cp, dp):
 
 
 @stencil
-def solve_tridiag(k, a, b, c, d):
-    cp, dp = lift(scan, 2)(tridiag_forward, True, (0, 0), k, a, b, c, d)
-    return scan(tridiag_backward, False, (0, 0), k, cp, dp)
+def solve_tridiag(a, b, c, d):
+    cp, dp = lift(tridiag_forward)(a, b, c, d)
+    return tridiag_backward(cp, dp)
 
 
 def test_tridiag(tridiag_reference):
     @fencil
-    def apply(x, k, a, b, c, d, domain):
-        apply_stencil(solve_tridiag, domain, [x], [k, a, b, c, d])
+    def apply(x, a, b, c, d, domain):
+        apply_stencil(solve_tridiag, domain, [x], [a, b, c, d])
 
     a, b, c, d, x = tridiag_reference
     a_s = storage(a)
@@ -115,25 +118,24 @@ def test_tridiag(tridiag_reference):
     c_s = storage(c)
     d_s = storage(d)
     x_s = storage(np.zeros_like(x))
-    k_s = index(x.shape, "k")
-    apply(x_s, k_s, a_s, b_s, c_s, d_s, domain=domain(x.shape))
+    apply(x_s, a_s, b_s, c_s, d_s, domain=domain(x.shape))
 
     assert np.allclose(x, np.asarray(x_s))
 
 
 def test_combined():
     @stencil
-    def hdiff_tridiag(k, a, b, c, d, coeff):
-        x = lift(solve_tridiag)(k, a, b, c, d)
+    def hdiff_tridiag(a, b, c, d, coeff):
+        x = lift(solve_tridiag)(a, b, c, d)
         return hdiff(x, coeff)
 
     @fencil
-    def apply(out, k, a, b, c, d, coeff, domain):
-        apply_stencil(hdiff_tridiag, domain, [out], [k, a, b, c, d, coeff])
+    def apply(out, a, b, c, d, coeff, domain):
+        apply_stencil(hdiff_tridiag, domain, [out], [a, b, c, d, coeff])
 
     rng = np.random.default_rng()
     shape = (2, 1, 3)
-    a = rng.normal(size=(shape[0] + 2, shape[1] + 2, shape[2]))
+    a = rng.normal(size=(shape[0] + 4, shape[1] + 4, shape[2]))
     b = rng.normal(size=a.shape)
     c = rng.normal(size=a.shape)
     d = rng.normal(size=a.shape)
@@ -144,6 +146,5 @@ def test_combined():
     d_s = storage(d, origin=(2, 2, 0))
     coeff_s = storage(coeff)
     out_s = storage(np.zeros(shape))
-    k_s = index(a.shape, "k")
 
-    apply(out_s, k_s, a_s, b_s, c_s, d_s, coeff_s, domain=domain(shape))
+    apply(out_s, a_s, b_s, c_s, d_s, coeff_s, domain=domain(shape))
