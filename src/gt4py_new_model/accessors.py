@@ -44,8 +44,8 @@ def index_column_accessor(dimension: str, focus: int, column: str, size: int):
     def res(offsets):
         offset = {o.dimension: o.offset for o in offsets}.get(dimension, 0)
         if column == dimension:
-            return focus + offset + np.arange(size)
-        return np.full(size, focus + offset)
+            return np.roll(np.arange(size), -focus - offset)
+        return np.full(size, ((focus + offset) % size + size) % size)
 
     return res
 
