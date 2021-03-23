@@ -32,7 +32,7 @@ def _unzip_column(col):
     )
 
 
-def polymorhic_stencil(func):
+def polymorphic_stencil(func):
     def wrapper(*accs):
         if not _has_column_accessors(accs):
             return func(*accs)
