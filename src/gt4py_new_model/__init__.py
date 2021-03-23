@@ -3,7 +3,7 @@ from importlib.metadata import version
 __version__ = version(__package__)
 
 from .dimensions import I, J, K
-from .application import apply_stencil, domain, fencil, lift, stencil
+from .application import apply_stencil, domain, fencil, lift, liftv, stencil
 from .builtins import forward, backward, polymorphic_stencil
 from .storage import storage, index, constant
 
@@ -15,6 +15,7 @@ __all__ = [
     "domain",
     "fencil",
     "lift",
+    "liftv",
     "stencil",
     "polymorphic_stencil",
     "storage",

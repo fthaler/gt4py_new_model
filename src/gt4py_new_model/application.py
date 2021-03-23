@@ -50,6 +50,29 @@ def lift(stencil):
     return lifted
 
 
+def liftv(stencil):
+    def lifted(*args):
+        @accessor
+        def acc(offsets):
+            offsets_dict = {o.dimension: o.offset for o in offsets}
+            k_offset = offsets_dict.pop("k", 0)
+            all_but_k_offsets = tuple(Dimension(*o) for o in offsets_dict.items())
+
+            def wrap(acc):
+                return accessor(
+                    lambda offs: acc[Dimension.collect(*all_but_k_offsets, *offs)]
+                )
+
+            res = stencil(*(wrap(arg) for arg in args))
+            if isinstance(res, tuple):
+                return tuple(np.roll(c, -k_offset) for c in res)
+            return np.roll(res, -k_offset)
+
+        return _unzip_accessor(acc)
+
+    return lifted
+
+
 def fencil(func):
     return func
 
