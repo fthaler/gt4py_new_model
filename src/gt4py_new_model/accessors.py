@@ -48,3 +48,11 @@ def index_column_accessor(dimension: str, focus: int, column: str, size: int):
         return np.full(size, focus + offset)
 
     return res
+
+
+def constant_column_accessor(value, size: int):
+    @accessor
+    def res(offsets):
+        return np.full(size, value)
+
+    return res

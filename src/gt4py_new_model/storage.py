@@ -1,8 +1,13 @@
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 
-from .accessors import array_column_accessor, index_column_accessor
+from .accessors import (
+    array_column_accessor,
+    constant_column_accessor,
+    index_column_accessor,
+)
 
 
 @dataclass(frozen=True)
@@ -77,3 +82,15 @@ def index(shape, index_dimension, dimensions=None, origin=None):
         origin=origin,
         index_dimension=index_dimension,
     )
+
+
+@dataclass(frozen=True)
+class ConstantStorage:
+    value: Any
+
+    def _k_column_accessor(self, i, j, k_size):
+        return constant_column_accessor(value=self.value, size=k_size)
+
+
+def constant(value):
+    return ConstantStorage(value=value)
