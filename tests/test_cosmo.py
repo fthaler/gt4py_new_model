@@ -6,15 +6,15 @@ from gt4py_new_model import *
 
 @polymorphic_stencil
 def laplacian(inp):
-    return -4 * inp[I, J] + (inp[I + 1] + inp[I - 1] + inp[J + 1] + inp[J - 1])
+    return -4 * inp[()] + (inp[I + 1] + inp[I - 1] + inp[J + 1] + inp[J - 1])
 
 
 def hdiff_flux(dim):
     @polymorphic_stencil
     def res(inp):
         lap = lift(laplacian)(inp)
-        uflux = lap[dim] - lap[dim + 1]
-        return 0 if uflux * (inp[dim + 1] - inp[dim]) > 0 else uflux
+        uflux = lap[()] - lap[dim + 1]
+        return 0 if uflux * (inp[dim + 1] - inp[()]) > 0 else uflux
 
     return res
 
@@ -23,7 +23,7 @@ def hdiff_flux(dim):
 def hdiff(inp, coeff):
     flx = lift(hdiff_flux(I))(inp)
     fly = lift(hdiff_flux(J))(inp)
-    return inp[I, J] - coeff[I, J] * (flx[I] - flx[I - 1] + fly[J] - fly[J - 1])
+    return inp[()] - coeff[()] * (flx[()] - flx[I - 1] + fly[()] - fly[J - 1])
 
 
 @pytest.fixture
