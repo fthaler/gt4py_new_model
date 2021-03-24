@@ -26,15 +26,15 @@ def test_column_accessor():
 
 
 def test_index_column_accessor():
-    accessor = index_column_accessor(dimension="a", focus=3, column="a", size=2)
+    accessor = index_column_accessor(dimension="a", focus=1, column="a", size=2)
     a = Dimension("a")
     b = Dimension("b")
-    assert np.all(accessor[a] == np.arange(3, 5))
-    assert np.all(accessor[a + 1] == np.arange(4, 6))
-    assert np.all(accessor[b + 1] == np.arange(3, 5))
-    accessor = index_column_accessor(dimension="a", focus=3, column="b", size=2)
+    assert np.all(accessor[a] == np.array([1, 0]))
+    assert np.all(accessor[a + 1] == np.array([0, 1]))
+    assert np.all(accessor[b + 1] == np.array([1, 0]))
+    accessor = index_column_accessor(dimension="a", focus=1, column="b", size=2)
     a = Dimension("a")
     b = Dimension("b")
-    assert np.all(accessor[a] == np.full(2, 3))
-    assert np.all(accessor[a + 1] == np.full(2, 4))
-    assert np.all(accessor[b + 1] == np.full(2, 3))
+    assert np.all(accessor[a] == np.full(2, 1))
+    assert np.all(accessor[a + 1] == np.full(2, 0))
+    assert np.all(accessor[b + 1] == np.full(2, 1))
