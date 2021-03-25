@@ -197,3 +197,287 @@ def test_no_idea_what_it_is_doing():
     apply(qv_in_s, dp_s, qv_out_s, domain=domain(qv_in.shape))
 
     assert np.allclose(qv_out, qv_out_s)
+
+
+def divergence_corner_reference():
+    shape = (5, 7, 3)
+    rng = np.random.default_rng()
+    u = rng.normal(size=shape)
+    v = rng.normal(size=shape)
+    ua = rng.normal(size=shape)
+    va = rng.normal(size=shape)
+    dxc = rng.normal(size=shape[:2])
+    dyc = rng.normal(size=shape[:2])
+    sin_sg1 = rng.normal(size=shape[:2])
+    sin_sg2 = rng.normal(size=shape[:2])
+    sin_sg3 = rng.normal(size=shape[:2])
+    sin_sg4 = rng.normal(size=shape[:2])
+    cos_sg1 = rng.normal(size=shape[:2])
+    cos_sg2 = rng.normal(size=shape[:2])
+    cos_sg3 = rng.normal(size=shape[:2])
+    cos_sg4 = rng.normal(size=shape[:2])
+    rarea_c = rng.normal(size=shape[:2])
+    divg_d = rng.normal(size=shape)
+    uf = np.zeros_like(u)
+    vf = np.zeros_like(v)
+
+    i_start = 1
+    i_end = shape[0] - 2
+    j_start = 1
+    j_end = shape[1] - 2
+
+    uf[:, 1:, :] = (
+        (
+            u[:, 1:, :]
+            - 0.25
+            * (va[:, :-1, :] + va[:, 1:, :])
+            * (cos_sg4[:, :-1, np.newaxis] + cos_sg2[:, 1:, np.newaxis])
+        )
+        * dyc[:, 1:, np.newaxis]
+        * 0.5
+        * (sin_sg4[:, :-1, np.newaxis] + sin_sg2[:, 1:, np.newaxis])
+    )
+    uf[:, j_start, :] = (
+        u[:, j_start, :]
+        * dyc[:, j_start, np.newaxis]
+        * 0.5
+        * (sin_sg4[:, j_start - 1, np.newaxis] + sin_sg2[:, j_start, np.newaxis])
+    )
+    uf[:, j_end + 1] = (
+        u[:, j_end + 1, :]
+        * dyc[:, j_end + 1, np.newaxis]
+        * 0.5
+        * (sin_sg4[:, j_end, np.newaxis] + sin_sg2[:, j_end + 1, np.newaxis])
+    )
+
+    vf[1:, :, :] = (
+        (
+            v[1:, :, :]
+            - 0.25
+            * (ua[:-1, :, :] + ua[1:, :, :])
+            * (cos_sg3[:-1, :, np.newaxis] + cos_sg1[1:, :, np.newaxis])
+        )
+        * dxc[1:, :, np.newaxis]
+        * 0.5
+        * (sin_sg3[:-1, :, np.newaxis] + sin_sg1[1:, :, np.newaxis])
+    )
+    vf[i_start, :, :] = (
+        v[i_start, :, :]
+        * dxc[i_start, :, np.newaxis]
+        * 0.5
+        * (sin_sg3[i_start - 1, :, np.newaxis] + sin_sg1[i_start, :, np.newaxis])
+    )
+    vf[i_end + 1, :, :] = (
+        v[i_end + 1, :, :]
+        * dxc[i_end + 1, :, np.newaxis]
+        * 0.5
+        * (sin_sg3[i_end, :, np.newaxis] + sin_sg1[i_end + 1, :, np.newaxis])
+    )
+
+    divg_d[1:, 1:, :] = vf[1:, :-1, :] - vf[1:, 1:, :] + uf[:-1, 1:, :] - uf[1:, 1:, :]
+    divg_d[i_start, j_start] -= vf[i_start, j_start - 1, :]
+    divg_d[i_end + 1, j_start] -= vf[i_end + 1, j_start - 1, :]
+    divg_d[i_end + 1, j_end + 1, :] += vf[i_end + 1, j_end + 1, :]
+    divg_d[i_start, j_end + 1, :] += vf[i_start, j_end + 1, :]
+
+    divg_d *= rarea_c[:, :, np.newaxis]
+
+    return (
+        i_start,
+        i_end,
+        j_start,
+        j_end,
+        u,
+        v,
+        ua,
+        va,
+        dxc,
+        dyc,
+        sin_sg1,
+        sin_sg2,
+        sin_sg3,
+        sin_sg4,
+        cos_sg1,
+        cos_sg2,
+        cos_sg3,
+        cos_sg4,
+        rarea_c,
+    ), divg_d[i_start : i_end + 2, j_start : j_end + 2]
+
+
+def divergence_corner_impl(i_start, i_end, j_start, j_end):
+    @polymorphic_stencil
+    def ufs(j, u, va, dyc, sin_sg2, sin_sg4, cos_sg2, cos_sg4):
+        if j[()] == j_start or j[()] == j_end + 1:
+            return u[()] * dyc[()] * 0.5 * (sin_sg4[J - 1] + sin_sg2[()])
+        else:
+            return (
+                (u[()] - 0.25 * (va[J - 1] + va[()]) * (cos_sg4[J - 1] + cos_sg2[()]))
+                * dyc[()]
+                * 0.5
+                * (sin_sg4[J - 1] + sin_sg2[()])
+            )
+
+    @polymorphic_stencil
+    def vfs(i, v, ua, dxc, sin_sg1, sin_sg3, cos_sg1, cos_sg3):
+        if i[()] == i_start or i[()] == i_end + 1:
+            return v[()] * dxc[()] * 0.5 * (sin_sg3[I - 1] + sin_sg1[()])
+        else:
+            return (
+                (v[()] - 0.25 * (ua[I - 1] + ua[()]) * (cos_sg3[I - 1] + cos_sg1[()]))
+                * dxc[()]
+                * 0.5
+                * (sin_sg3[I - 1] + sin_sg1[()])
+            )
+
+    @polymorphic_stencil
+    def divgs(i, j, uf, vf, rarea_c):
+        divg = vf[J - 1] - vf[()] + uf[I - 1] - uf[()]
+        ij = (i[()], j[()])
+        j_start_corners = ((i_start, j_start), (i_end + 1, j_start))
+        i_start_corners = ((i_end + 1, j_end + 1), (i_start, j_end + 1))
+        if ij in j_start_corners:
+            return (divg - vf[J - 1]) * rarea_c[()]
+        elif ij in i_start_corners:
+            return (divg + vf[()]) * rarea_c[()]
+        else:
+            return divg * rarea_c[()]
+
+    @polymorphic_stencil
+    def impl(
+        i,
+        j,
+        u,
+        v,
+        ua,
+        va,
+        dxc,
+        dyc,
+        sin_sg1,
+        sin_sg2,
+        sin_sg3,
+        sin_sg4,
+        cos_sg1,
+        cos_sg2,
+        cos_sg3,
+        cos_sg4,
+        rarea_c,
+    ):
+        uf = lift(ufs)(j, u, va, dyc, sin_sg2, sin_sg4, cos_sg2, cos_sg4)
+        vf = lift(vfs)(i, v, ua, dxc, sin_sg1, sin_sg3, cos_sg1, cos_sg3)
+        return divgs(i, j, uf, vf, rarea_c)
+
+    return impl
+
+
+def test_divergence_corner():
+    (
+        i_start,
+        i_end,
+        j_start,
+        j_end,
+        u,
+        v,
+        ua,
+        va,
+        dxc,
+        dyc,
+        sin_sg1,
+        sin_sg2,
+        sin_sg3,
+        sin_sg4,
+        cos_sg1,
+        cos_sg2,
+        cos_sg3,
+        cos_sg4,
+        rarea_c,
+    ), divg_d = divergence_corner_reference()
+    u_s = storage(u, origin=(1, 1, 0))
+    v_s = storage(v, origin=(1, 1, 0))
+    ua_s = storage(ua, origin=(1, 1, 0))
+    va_s = storage(va, origin=(1, 1, 0))
+    dxc_s = storage(dxc, origin=(1, 1))
+    dyc_s = storage(dyc, origin=(1, 1))
+    sin_sg1_s = storage(sin_sg1, origin=(1, 1))
+    sin_sg2_s = storage(sin_sg2, origin=(1, 1))
+    sin_sg3_s = storage(sin_sg3, origin=(1, 1))
+    sin_sg4_s = storage(sin_sg4, origin=(1, 1))
+    cos_sg1_s = storage(cos_sg1, origin=(1, 1))
+    cos_sg2_s = storage(cos_sg2, origin=(1, 1))
+    cos_sg3_s = storage(cos_sg3, origin=(1, 1))
+    cos_sg4_s = storage(cos_sg4, origin=(1, 1))
+    rarea_c_s = storage(rarea_c, origin=(1, 1))
+    divg_d_s = storage(np.zeros_like(divg_d))
+    i_s = index(u.shape, "i", origin=(1, 1, 0))
+    j_s = index(u.shape, "j", origin=(1, 1, 0))
+
+    @fencil
+    def apply(
+        i,
+        j,
+        u,
+        v,
+        ua,
+        va,
+        dxc,
+        dyc,
+        sin_sg1,
+        sin_sg2,
+        sin_sg3,
+        sin_sg4,
+        cos_sg1,
+        cos_sg2,
+        cos_sg3,
+        cos_sg4,
+        rarea_c,
+        divg_d,
+        domain,
+    ):
+        apply_stencil(
+            divergence_corner_impl(i_start, i_end, j_start, j_end),
+            domain,
+            [divg_d],
+            [
+                i,
+                j,
+                u,
+                v,
+                ua,
+                va,
+                dxc,
+                dyc,
+                sin_sg1,
+                sin_sg2,
+                sin_sg3,
+                sin_sg4,
+                cos_sg1,
+                cos_sg2,
+                cos_sg3,
+                cos_sg4,
+                rarea_c,
+            ],
+        )
+
+    apply(
+        i_s,
+        j_s,
+        u_s,
+        v_s,
+        ua_s,
+        va_s,
+        dxc_s,
+        dyc_s,
+        sin_sg1_s,
+        sin_sg2_s,
+        sin_sg3_s,
+        sin_sg4_s,
+        cos_sg1_s,
+        cos_sg2_s,
+        cos_sg3_s,
+        cos_sg4_s,
+        rarea_c_s,
+        divg_d_s,
+        domain=domain(divg_d.shape),
+    )
+
+    assert np.allclose(divg_d, divg_d_s)
