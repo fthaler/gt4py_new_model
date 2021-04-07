@@ -36,5 +36,5 @@ def test_index_column_accessor():
     a = Dimension("a")
     b = Dimension("b")
     assert np.all(accessor[a] == np.full(2, 1))
-    assert np.all(accessor[a + 1] == np.full(2, 0))
+    assert np.all(accessor[a + 1] == np.full(2, 2))
     assert np.all(accessor[b + 1] == np.full(2, 1))
