@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Tuple
 
 import numpy as np
 
@@ -13,8 +13,8 @@ from .accessors import (
 @dataclass(frozen=True)
 class ArrayStorage:
     array: np.ndarray
-    dimensions: tuple[str, ...]
-    origin: tuple[int, ...]
+    dimensions: Tuple[str, ...]
+    origin: Tuple[int, ...]
 
     def __array__(self):
         return self.array
@@ -42,9 +42,9 @@ def storage(array, dimensions=None, origin=None):
 
 @dataclass(frozen=True)
 class IndexStorage:
-    shape: tuple[int, ...]
-    dimensions: tuple[str, ...]
-    origin: tuple[int, ...]
+    shape: Tuple[int, ...]
+    dimensions: Tuple[str, ...]
+    origin: Tuple[int, ...]
     index_dimension: str
 
     def _k_column_accessor(self, i, j, k_size):

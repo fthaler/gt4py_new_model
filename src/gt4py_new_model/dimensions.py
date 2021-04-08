@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Tuple
 
 
 @dataclass(frozen=True)
@@ -23,8 +24,8 @@ class Dimension:
         return Dimension(dimension=self.dimension, offset=self.offset - other)
 
     @staticmethod
-    def collect(*indices: "Dimension") -> tuple["Dimension"]:
-        res = dict[str, int]()
+    def collect(*indices: "Dimension") -> Tuple["Dimension"]:
+        res = dict()
         for i in indices:
             res[i.dimension] = i.offset + res.get(i.dimension, 0)
         return tuple(Dimension(dimension=k, offset=v) for k, v in res.items())

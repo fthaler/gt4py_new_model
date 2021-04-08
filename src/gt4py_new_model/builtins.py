@@ -38,10 +38,10 @@ def polymorphic_stencil(func):
             return func(*accs)
 
         return _unzip_column(
-                [
-                    func(*(_demote_accessor(acc, k) for acc in accs))
-                    for k in range(_column_size(accs))
-                ]
+            [
+                func(*(_demote_accessor(acc, k) for acc in accs))
+                for k in range(_column_size(accs))
+            ]
         )
 
     return wrapper

@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Tuple, Union
 
 import numpy as np
 
@@ -17,8 +17,8 @@ def accessor(func):
 
 def array_column_accessor(
     array: np.ndarray,
-    dimensions: tuple[str, ...],
-    focus: tuple[int, ...],
+    dimensions: Tuple[str, ...],
+    focus: Tuple[int, ...],
     column: str,
     size: int,
 ):
