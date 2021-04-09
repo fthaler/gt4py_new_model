@@ -24,6 +24,26 @@ class FivePointNeighborHood:
 fp = FivePointNeighborHood()
 
 
+@neighborhood(LocationType.Vertex, LocationType.Vertex)
+class TopLeftNeighborHood:
+    center = 0
+    left = 1
+    top = 2
+
+
+topleftn = TopLeftNeighborHood()
+
+
+@neighborhood(LocationType.Vertex, LocationType.Vertex)
+class BottomRightNeighborHood:
+    center = 0
+    right = 1
+    bottom = 2
+
+
+bottomrightn = BottomRightNeighborHood()
+
+
 def make_fpconn(shape):
     strides = [shape[1], 1]
 
@@ -40,6 +60,34 @@ def make_fpconn(shape):
     return fpconn_neighs
 
 
+def make_topleftconn(shape):
+    strides = [shape[1], 1]
+
+    @simple_connectivity(topleftn)
+    def conn_neighs(index):
+        return [
+            index,
+            index - strides[0],
+            index - strides[1],
+        ]
+
+    return conn_neighs
+
+
+def make_bottomrightconn(shape):
+    strides = [shape[1], 1]
+
+    @simple_connectivity(bottomrightn)
+    def conn_neighs(index):
+        return [
+            index,
+            index + strides[0],
+            index + strides[1],
+        ]
+
+    return conn_neighs
+
+
 @stencil((fp,))
 def laplacian(inp):
     return -4 * inp[fp.center] + (
@@ -47,28 +95,37 @@ def laplacian(inp):
     )
 
 
-@stencil((fp,), (fp, fp))
+@stencil((bottomrightn,), (bottomrightn, fp))
 def hdiff_flux_x(inp1, inp2):
     lap = lift(laplacian)(inp2)
-    flux = lap[fp.center] - lap[fp.right]
+    flux = lap[bottomrightn.center] - lap[bottomrightn.right]
 
-    return 0 if flux * (inp1[fp.right] - inp1[fp.center]) > 0 else flux
+    return (
+        0 if flux * (inp1[bottomrightn.right] - inp1[bottomrightn.center]) > 0 else flux
+    )
 
 
-@stencil((fp,), (fp, fp))
+@stencil((bottomrightn,), (bottomrightn, fp))
 def hdiff_flux_y(inp1, inp2):
     lap = lift(laplacian)(inp2)
-    flux = lap[fp.center] - lap[fp.bottom]
+    flux = lap[bottomrightn.center] - lap[bottomrightn.bottom]
 
-    return 0 if flux * (inp1[fp.bottom] - inp1[fp.center]) > 0 else flux
+    return (
+        0
+        if flux * (inp1[bottomrightn.bottom] - inp1[bottomrightn.center]) > 0
+        else flux
+    )
 
 
-@stencil((fp,), (fp, fp), (fp, fp, fp), ())
+@stencil((topleftn,), (topleftn, bottomrightn), (topleftn, bottomrightn, fp), ())
 def hdiff(inp1, inp2, inp3, coeff):
     flx = lift(hdiff_flux_x)(inp2, inp3)
     fly = lift(hdiff_flux_y)(inp2, inp3)
-    return inp1[fp.center] - coeff * (
-        flx[fp.center] - flx[fp.left] + fly[fp.center] - fly[fp.top]
+    return inp1[topleftn.center] - coeff * (
+        flx[topleftn.center]
+        - flx[topleftn.left]
+        + fly[topleftn.center]
+        - fly[topleftn.top]
     )
 
 
@@ -93,7 +150,6 @@ def hdiff_reference():
     return inp, coeff, out
 
 
-# Note that verified domain is 1 line smaller because using five-point-connectivity requires halo of 3
 def test_hdiff(hdiff_reference):
     inp, coeff, out = hdiff_reference
     shape = (inp.shape[0], inp.shape[1])
@@ -105,10 +161,18 @@ def test_hdiff(hdiff_reference):
 
     domain = np.arange(math.prod(shape))
     domain_2d = as_2d(domain, shape)
-    inner_domain = as_1d(domain_2d[3:-3, 3:-3])
+    inner_domain = as_1d(domain_2d[2:-2, 2:-2])
 
     apply_stencil(
-        hdiff, inner_domain, [make_fpconn(shape)], out_s, [inp_s, inp_s, inp_s, coeff_s]
+        hdiff,
+        inner_domain,
+        [
+            make_fpconn(shape),
+            make_topleftconn(shape),
+            make_bottomrightconn(shape),
+        ],
+        out_s,
+        [inp_s, inp_s, inp_s, coeff_s],
     )
 
     assert np.allclose(out[1:-1, 1:-1, 0], np.asarray(as_2d(out_s, shape)[3:-3, 3:-3]))
