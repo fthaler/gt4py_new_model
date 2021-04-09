@@ -86,7 +86,7 @@ def ufield(loc):
 
 
 def apply_stencil(
-    stencil, domain, connectivities, out, inp
+    stencil, domain, connectivities, out, ins
 ):  # TODO support multiple input/output
     def neighborhood_to_key(neighborhood):
         return type(neighborhood).__name__
@@ -98,22 +98,23 @@ def apply_stencil(
         )  # we assume the user passes only non-multiplied connectivities (just for simplification)
         conn_map[neighborhood_to_key(c.neighborhoods[0])] = c
 
-    cur_conn = None
-    assert len(stencil.acc_neighborhood_chains) == 1  # TODO only one argument supported
-    if stencil.acc_neighborhood_chains[0]:
-        for nh in stencil.acc_neighborhood_chains[0]:
-            print(nh)
-            if not cur_conn:
-                cur_conn = conn_map[neighborhood_to_key(nh)]
-            else:
-                cur_conn = conn_mult(cur_conn, conn_map[neighborhood_to_key(nh)])
-        stencil_args = cur_conn(inp)
-    else:
-        stencil_args = inp
+    assert len(stencil.acc_neighborhood_chains) == len(ins)
+
+    stencil_args = []
+    for inp, nh_chains in zip(ins, stencil.acc_neighborhood_chains):
+        if nh_chains:
+            cur_conn = None
+            for nh in nh_chains:
+                if not cur_conn:
+                    cur_conn = conn_map[neighborhood_to_key(nh)]
+                else:
+                    cur_conn = conn_mult(cur_conn, conn_map[neighborhood_to_key(nh)])
+            stencil_args.append(cur_conn(inp))
+        else:
+            stencil_args.append(inp)
 
     for i in domain:
-        print(stencil(stencil_args(i)))
-        out[i] = stencil(stencil_args(i))
+        out[i] = stencil(*map(lambda fun: fun(i), stencil_args))
 
 
 @enum.unique

@@ -19,7 +19,7 @@ def test_copy():
 
     domain = np.arange(math.prod(shape))
 
-    apply_stencil(copy, domain, [], out1d, as_field(inp1d, LocationType.Vertex))
+    apply_stencil(copy, domain, [], out1d, [as_field(inp1d, LocationType.Vertex)])
     out2d = as_2d(out1d, shape)
     assert np.allclose(out2d, inp)
 
