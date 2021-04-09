@@ -7,10 +7,9 @@ from unstructured.concepts import (
     apply_stencil,
     lift,
     neighborhood,
-    simple_connectivity,
     stencil,
 )
-from unstructured.helpers import as_1d, as_2d, as_field
+from unstructured.helpers import as_1d, as_2d, as_field, simple_connectivity
 
 
 @neighborhood(LocationType.Vertex, LocationType.Vertex)

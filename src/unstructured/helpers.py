@@ -1,4 +1,4 @@
-from unstructured.concepts import LocationType
+from unstructured.concepts import LocationType, connectivity, ufield
 
 
 def as_1d(arr):
@@ -19,3 +19,18 @@ def as_field(arr, loc: LocationType):
             return arr[i]
 
     return _field()
+
+
+def simple_connectivity(neighborhood):
+    def _impl(fun):  # fun is function from index to array of neighbor index
+        @connectivity(neighborhood)
+        def conn(field):
+            @ufield(neighborhood.in_location)
+            def _field(index):
+                return [field(i) for i in fun(index)]
+
+            return _field
+
+        return conn
+
+    return _impl
