@@ -1,6 +1,19 @@
 import enum
 
 
+def ufield(loc):
+    def _impl(fun):
+        class _field:
+            location = loc
+
+            def __call__(self, index):
+                return fun(index)
+
+        return _field()
+
+    return _impl
+
+
 def connectivity(*_neighborhoods):
     def _impl(fun):
         class conn:
@@ -17,6 +30,21 @@ def connectivity(*_neighborhoods):
                 return fun(field)
 
         return conn()
+
+    return _impl
+
+
+def simple_connectivity(neighborhood):
+    def _impl(fun):  # fun is function from index to array of neighbor index
+        @connectivity(neighborhood)
+        def conn(field):
+            @ufield(neighborhood.in_location)
+            def _field(index):
+                return [field(i) for i in fun(index)]
+
+            return _field
+
+        return conn
 
     return _impl
 
@@ -70,19 +98,6 @@ def neighborhood(in_loc, out_loc):
         return cls
 
     return impl
-
-
-def ufield(loc):
-    def _impl(fun):
-        class _field:
-            location = loc
-
-            def __call__(self, index):
-                return fun(index)
-
-        return _field()
-
-    return _impl
 
 
 def apply_stencil(

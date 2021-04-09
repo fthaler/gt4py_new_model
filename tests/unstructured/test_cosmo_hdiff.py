@@ -5,11 +5,10 @@ import pytest
 from unstructured.concepts import (
     LocationType,
     apply_stencil,
-    connectivity,
     lift,
     neighborhood,
+    simple_connectivity,
     stencil,
-    ufield,
 )
 from unstructured.helpers import as_1d, as_2d, as_field
 
@@ -24,6 +23,22 @@ class FivePointNeighborHood:
 
 
 fp = FivePointNeighborHood()
+
+
+def make_fpconn(shape):
+    strides = [shape[1], 1]
+
+    @simple_connectivity(fp)
+    def fpconn_neighs(index):
+        return [
+            index,
+            index - strides[0],
+            index + strides[0],
+            index - strides[1],
+            index + strides[1],
+        ]
+
+    return fpconn_neighs
 
 
 @stencil((fp,))
@@ -77,26 +92,6 @@ def hdiff_reference():
     )
 
     return inp, coeff, out
-
-
-def make_fpconn(shape):
-    strides = [shape[1], 1]
-
-    @connectivity(fp)
-    def v2v_conn(field):
-        @ufield(LocationType.Vertex)
-        def _field(index):
-            return [
-                field(index),
-                field(index - strides[0]),
-                field(index + strides[0]),
-                field(index - strides[1]),
-                field(index + strides[1]),
-            ]
-
-        return _field
-
-    return v2v_conn
 
 
 def test_hdiff(hdiff_reference):
