@@ -112,23 +112,34 @@ class V2VNeighborHood:
     bottom = 3
 
 
+def ufield(loc):
+    def _impl(fun):
+        class _field:
+            location = loc
+
+            def __call__(self, index):
+                return fun(index)
+
+        return _field()
+
+    return _impl
+
+
 def make_v2v_conn(shape_2d):
     strides = [shape_2d[1], 1]
 
     @connectivity(V2VNeighborHood())
     def v2v_conn(field):
-        class new_field:
-            location = LocationType.Vertex  # TODO information is duplicated
+        @ufield(LocationType.Vertex)
+        def _field(index):
+            return [
+                field(index + strides[0]),
+                field(index - strides[0]),
+                field(index + strides[1]),
+                field(index - strides[1]),
+            ]
 
-            def __call__(self, index):
-                return [
-                    field(index + strides[0]),
-                    field(index - strides[0]),
-                    field(index + strides[1]),
-                    field(index - strides[1]),
-                ]
-
-        return new_field()
+        return _field
 
     return v2v_conn
 
@@ -136,12 +147,12 @@ def make_v2v_conn(shape_2d):
 vv = V2VNeighborHood()
 
 
-@stencil((vv))
+@stencil((vv,))
 def v2v(acc_in):
     return acc_in[vv.left] + acc_in[vv.right] + acc_in[vv.top] + acc_in[vv.bottom]
 
 
-# @stencil([neighborhood, neighborhood])
+@stencil((vv, vv))
 def v2v2v(acc_in):
     x = lift(v2v)(acc_in)
     return v2v(x)
@@ -151,17 +162,29 @@ def neighborhood_chain_to_key(neighborhood_chain):
     return tuple(type(nh).__name__ for nh in neighborhood_chain)
 
 
+def neighborhood_to_key(neighborhood):
+    return type(neighborhood).__name__
+
+
 def apply_stencil(
     stencil, domain, connectivities, out, inp
 ):  # TODO support multiple input/output
     conn_map = {}
     for c in connectivities:
-        conn_map[neighborhood_chain_to_key(c.neighborhoods)] = c
+        assert (
+            len(c.neighborhoods) == 1
+        )  # we assume the user passes only non-multiplied connectivities (just for simplification)
+        conn_map[neighborhood_to_key(c.neighborhoods[0])] = c
 
-    devtools.debug(stencil.acc_neighborhood_chains)
-    stencil_args = conn_map[neighborhood_chain_to_key(stencil.acc_neighborhood_chains)](
-        inp
-    )
+    cur_conn = None
+    assert len(stencil.acc_neighborhood_chains) == 1  # TODO only one argument supported
+    for nh in stencil.acc_neighborhood_chains[0]:
+        print(nh)
+        if not cur_conn:
+            cur_conn = conn_map[neighborhood_to_key(nh)]
+        else:
+            cur_conn = conn_mult(cur_conn, conn_map[neighborhood_to_key(nh)])
+    stencil_args = cur_conn(inp)
 
     for i in domain:
         out[i] = stencil(stencil_args(i))
@@ -260,7 +283,9 @@ def test_v2v2v():
     inner_domain = as_1d(domain_2d[2:-2, 2:-2])
 
     v2v_conn = make_v2v_conn(shape)
-    apply(v2v2v, inner_domain, v2v_conn, out1d, inp1d)
+    apply_stencil(
+        v2v2v, inner_domain, [v2v_conn], out1d, as_field(inp1d, LocationType.Vertex)
+    )
     out2d = as_2d(out1d, shape)
     assert np.allclose(out2d, ref)
 
