@@ -51,10 +51,10 @@ def stencil(*args):
 
 
 def lift(stencil):
-    def lifted(acc):
+    def lifted(*acc):
         class wrap:
             def __getitem__(self, i):
-                return stencil(acc[i])
+                return stencil(*map(lambda x: x[i], acc))
 
         return wrap()
 
