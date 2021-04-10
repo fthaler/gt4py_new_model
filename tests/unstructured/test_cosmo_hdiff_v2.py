@@ -175,4 +175,4 @@ def test_hdiff(hdiff_reference):
         [inp_s, inp_s, inp_s, coeff_s],
     )
 
-    assert np.allclose(out[1:-1, 1:-1, 0], np.asarray(as_2d(out_s, shape)[3:-3, 3:-3]))
+    assert np.allclose(out[:, :, 0], np.asarray(as_2d(out_s, shape)[2:-2, 2:-2]))

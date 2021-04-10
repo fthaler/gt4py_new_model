@@ -93,7 +93,6 @@ def hdiff_reference():
     return inp, coeff, out
 
 
-# Note that verified domain is 1 line smaller because using five-point-connectivity requires halo of 3
 def test_hdiff(hdiff_reference):
     inp, coeff, out = hdiff_reference
     shape = (inp.shape[0], inp.shape[1])
@@ -105,10 +104,10 @@ def test_hdiff(hdiff_reference):
 
     domain = np.arange(math.prod(shape))
     domain_2d = as_2d(domain, shape)
-    inner_domain = as_1d(domain_2d[3:-3, 3:-3])
+    inner_domain = as_1d(domain_2d[2:-2, 2:-2])
 
     apply_stencil(
         hdiff, inner_domain, [make_fpconn(shape)], out_s, [inp_s, inp_s, inp_s, coeff_s]
     )
 
-    assert np.allclose(out[1:-1, 1:-1, 0], np.asarray(as_2d(out_s, shape)[3:-3, 3:-3]))
+    assert np.allclose(out[:, :, 0], np.asarray(as_2d(out_s, shape)[2:-2, 2:-2]))

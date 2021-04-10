@@ -27,7 +27,11 @@ def simple_connectivity(neighborhood):
         def conn(field):
             @ufield(neighborhood.in_location)
             def _field(index):
-                return [field(i) for i in fun(index)]
+                class neighs:
+                    def __getitem__(self, i):
+                        return field(fun(index)[i])
+
+                return neighs()
 
             return _field
 
