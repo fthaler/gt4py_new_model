@@ -21,27 +21,27 @@ def laplacian(inp):
     return -4 * inp[0, 0] + (inp[-1, 0] + inp[1, 0] + inp[0, -1] + inp[0, 1])
 
 
-@stencil((cart,))
-def hdiff_flux_x(inp):
-    lap = lift(laplacian)(inp)
+@stencil((cart,), (cart, cart))
+def hdiff_flux_x(inp1, inp2):
+    lap = lift(laplacian)(inp2)
     flux = lap[0, 0] - lap[1, 0]
 
-    return 0 if flux * (inp[1, 0] - inp[0, 0]) > 0 else flux
+    return 0 if flux * (inp1[1, 0] - inp1[0, 0]) > 0 else flux
 
 
-@stencil((cart,))
-def hdiff_flux_y(inp):
-    lap = lift(laplacian)(inp)
+@stencil((cart,), (cart, cart))
+def hdiff_flux_y(inp1, inp2):
+    lap = lift(laplacian)(inp2)
     flux = lap[0, 0] - lap[0, 1]
 
-    return 0 if flux * (inp[0, 1] - inp[0, 0]) > 0 else flux
+    return 0 if flux * (inp1[0, 1] - inp1[0, 0]) > 0 else flux
 
 
-@stencil((cart,), ())
-def hdiff(inp, coeff):
-    flx = lift(hdiff_flux_x)(inp)
-    fly = lift(hdiff_flux_y)(inp)
-    return inp[0, 0] - coeff * (flx[0, 0] - flx[-1, 0] + fly[0, 0] - fly[0, -1])
+@stencil((cart,), (cart, cart), (cart, cart, cart), ())
+def hdiff(inp1, inp2, inp3, coeff):
+    flx = lift(hdiff_flux_x)(inp2, inp3)
+    fly = lift(hdiff_flux_y)(inp2, inp3)
+    return inp1[0, 0] - coeff * (flx[0, 0] - flx[-1, 0] + fly[0, 0] - fly[0, -1])
 
 
 @pytest.fixture
@@ -76,16 +76,12 @@ def test_hdiff(hdiff_reference):
 
     inner_domain = [list(range(2, shape[0] - 2)), list(range(2, shape[1] - 2))]
 
-    # TODO: lift needs to deal with the folded accessors (i.e. cartesian_acc(cartesian_acc(...)) is folded to cartesian_acc(...))
-    # apply_stencil(
-    #     hdiff,
-    #     inner_domain,
-    #     [cartesian_connectivity],
-    #     out_s,
-    #     [inp_s, coeff_s],
-    # )
+    apply_stencil(
+        hdiff,
+        inner_domain,
+        [cartesian_connectivity],
+        out_s,
+        [inp_s, inp_s, inp_s, coeff_s],
+    )
 
-    # assert np.allclose(out[:, :, 0], out_s[2:-2, 2:-2])
-
-
-# test_hdiff(hdiff_reference())
+    assert np.allclose(out[:, :, 0], out_s[2:-2, 2:-2])
