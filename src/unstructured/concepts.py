@@ -67,8 +67,8 @@ def stencil(*args):
 def lift(stencil):
     def lifted(*acc):
         class wrap:
-            def __getitem__(self, i):
-                return stencil(*map(lambda x: x[i], acc))
+            def __getitem__(self, indices):
+                return stencil(*map(lambda x: x[indices], acc))
 
         return wrap()
 
