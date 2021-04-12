@@ -8,27 +8,9 @@ from unstructured.concepts import (
     stencil,
 )
 from unstructured.helpers import as_field, simple_connectivity
-
-
-@neighborhood(LocationType.Vertex, LocationType.Vertex)
-class CartesianNeighborHood:
-    pass
-
+from unstructured.cartesian import CartesianNeighborHood, cartesian_connectivity
 
 cart = CartesianNeighborHood()
-
-
-@simple_connectivity(cart)
-def cartesian_connectivity(*indices):
-    class neighs:
-        def __getitem__(self, neighindices):
-            if not isinstance(neighindices, tuple):
-                neighindices = (neighindices,)
-            return tuple(
-                map(lambda x: x[0] + x[1], zip(indices, neighindices)),
-            )
-
-    return neighs()
 
 
 @stencil((cart,))
