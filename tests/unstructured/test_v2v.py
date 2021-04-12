@@ -72,12 +72,12 @@ def test_v2v():
 
     domain = np.arange(math.prod(shape))
     domain_2d = as_2d(domain, shape)
-    inner_domain = as_1d(domain_2d[1:-1, 1:-1])
+    inner_domain = as_1d(domain_2d[1:-1, 1:-1]).tolist()
 
     v2v_conn = make_v2v_conn(shape)
 
     apply_stencil(
-        v2v, inner_domain, [v2v_conn], out1d, [as_field(inp1d, LocationType.Vertex)]
+        v2v, [inner_domain], [v2v_conn], out1d, [as_field(inp1d, LocationType.Vertex)]
     )
     out2d = as_2d(out1d, shape)
     assert np.allclose(out2d, ref)
@@ -95,11 +95,11 @@ def test_v2v2v():
 
     domain = np.arange(math.prod(shape))
     domain_2d = as_2d(domain, shape)
-    inner_domain = as_1d(domain_2d[2:-2, 2:-2])
+    inner_domain = as_1d(domain_2d[2:-2, 2:-2]).tolist()
 
     v2v_conn = make_v2v_conn(shape)
     apply_stencil(
-        v2v2v, inner_domain, [v2v_conn], out1d, [as_field(inp1d, LocationType.Vertex)]
+        v2v2v, [inner_domain], [v2v_conn], out1d, [as_field(inp1d, LocationType.Vertex)]
     )
     out2d = as_2d(out1d, shape)
     assert np.allclose(out2d, ref)
@@ -117,12 +117,12 @@ def test_v2v2v_with_v2v():
 
     domain = np.arange(math.prod(shape))
     domain_2d = as_2d(domain, shape)
-    inner_domain = as_1d(domain_2d[2:-2, 2:-2])
+    inner_domain = as_1d(domain_2d[2:-2, 2:-2]).tolist()
 
     v2v_conn = make_v2v_conn(shape)
     apply_stencil(
         v2v2v_with_v2v,
-        inner_domain,
+        [inner_domain],
         [v2v_conn],
         out1d,
         [as_field(inp1d, LocationType.Vertex), as_field(inp1d, LocationType.Vertex)],

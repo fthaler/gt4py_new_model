@@ -161,7 +161,7 @@ def test_hdiff(hdiff_reference):
 
     domain = np.arange(math.prod(shape))
     domain_2d = as_2d(domain, shape)
-    inner_domain = as_1d(domain_2d[2:-2, 2:-2])
+    inner_domain = [as_1d(domain_2d[2:-2, 2:-2]).tolist()]
 
     apply_stencil(
         hdiff,

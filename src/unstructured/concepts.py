@@ -1,4 +1,5 @@
 import enum
+import itertools
 
 
 def ufield(loc):
@@ -6,8 +7,8 @@ def ufield(loc):
         class _field:
             location = loc
 
-            def __call__(self, index):
-                return fun(index)
+            def __call__(self, *indices):
+                return fun(*indices)
 
         return _field()
 
@@ -87,7 +88,7 @@ def neighborhood(in_loc, out_loc):
 
 def apply_stencil(
     stencil, domain, connectivities, out, ins
-):  # TODO support multiple input/output
+):  # TODO support multiple output
     def neighborhood_to_key(neighborhood):
         return type(neighborhood).__name__
 
@@ -113,8 +114,8 @@ def apply_stencil(
         else:
             stencil_args.append(inp)
 
-    for i in domain:
-        out[i] = stencil(*map(lambda fun: fun(i), stencil_args))
+    for indices in itertools.product(*domain):
+        out[indices] = stencil(*map(lambda fun: fun(*indices), stencil_args))
 
 
 @enum.unique

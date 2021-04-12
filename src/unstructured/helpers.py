@@ -15,8 +15,8 @@ def as_field(arr, loc: LocationType):
     class _field:
         location = loc
 
-        def __call__(self, i: int):
-            return arr[i]
+        def __call__(self, indices):
+            return arr[indices]
 
     return _field()
 
@@ -26,10 +26,10 @@ def simple_connectivity(neighborhood):
         @connectivity(neighborhood)
         def conn(field):
             @ufield(neighborhood.in_location)
-            def _field(index):
+            def _field(*index):
                 class neighs:
-                    def __getitem__(self, i):
-                        return field(fun(index)[i])
+                    def __getitem__(self, indices):
+                        return field(fun(*index)[indices])
 
                 return neighs()
 
