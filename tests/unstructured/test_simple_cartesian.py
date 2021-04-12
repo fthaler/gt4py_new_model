@@ -47,6 +47,25 @@ def laplacian2d(inp):
     return -4 * inp[0, 0] + (inp[-1, 0] + inp[1, 0] + inp[0, -1] + inp[0, 1])
 
 
+# @stencil((cart,))
+# def diff_xr(inp):
+#     return inp[1, 0] - inp[0, 0]
+
+
+# @stencil((cart,))
+# def diff_yr(inp):
+#     return inp[0, 1] - inp[0, 0]
+
+
+# @stencil((cart, cart))
+# def lap(inp):
+#     return diff_xl(lift(diff_xr)(inp)) + diff_yl(lift(diff_yr)(inp))
+
+#     # return (inp[1, 0] - inp[0, 0])[-1, 0] - (inp[1, 0] - inp[0, 0])[0, 0] + ...
+
+#     # return inp[1, 0][-1, 0] - inp[0, 0][-1, 0] + ...
+
+
 def test_lap():
     shape = (5, 7)
     inp = np.zeros(shape)
