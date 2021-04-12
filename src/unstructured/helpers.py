@@ -29,7 +29,10 @@ def simple_connectivity(neighborhood):
             def _field(*index):
                 class neighs:
                     def __getitem__(self, indices):
-                        return field(*fun(*index)[indices])
+                        res = fun(*index)[indices]
+                        if not isinstance(res, tuple):
+                            res = (res,)
+                        return field(*res)
 
                 return neighs()
 
