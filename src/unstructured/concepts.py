@@ -26,7 +26,7 @@ def connectivity(*_neighborhoods):
 
             def __call__(self, field):
                 assert hasattr(field, "location")
-                assert field.location == self.in_location
+                assert field.location == self.out_location
 
                 return fun(field)
 
