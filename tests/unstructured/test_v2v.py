@@ -15,14 +15,14 @@ from unstructured.helpers import as_1d, as_2d, as_field
 
 @neighborhood(LocationType.Vertex, LocationType.Vertex)
 class V2VNeighborHood:
-    left = 0
-    right = 1
+    right = 0
+    left = 1
     top = 2
     bottom = 3
 
 
 def make_v2v_conn(shape_2d):
-    strides = [shape_2d[1], 1]
+    strides = [1, shape_2d[1]]
 
     @connectivity(V2VNeighborHood())
     def v2v_conn(field):
