@@ -36,6 +36,9 @@ def dummy_v2e_conn(field):
 
 
 def test_conn_multiply():
+    assert dummy_e2v_conn.in_location == LocationType.Edge
+    assert dummy_e2v_conn.in_location == LocationType.Vertex
+
     e2v2e = conn_mult(dummy_e2v_conn, dummy_v2e_conn)
     assert e2v2e.in_location == LocationType.Edge
     assert e2v2e.out_location == LocationType.Edge
