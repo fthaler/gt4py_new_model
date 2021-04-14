@@ -80,13 +80,13 @@ def make_hdiff_connectivity(neighborhood):
     @simple_connectivity(neighborhood)
     def cartesian_connectivity(*indices):
         class neighs:
-            def __getitem__(self, neighindices):
-                if not isinstance(neighindices, tuple):
-                    neighindices = (neighindices,)
+            def __getitem__(self, offsets):
+                if not isinstance(offsets, tuple):
+                    offsets = (offsets,)
                 return tuple(
                     map(
                         lambda x: int(x[0] + x[1] + x[2]),
-                        zip(indices, neighindices, neighborhood.shift),
+                        zip(indices, offsets, neighborhood.shift),
                     ),
                 )
 
