@@ -45,7 +45,11 @@ def simple_connectivity(neighborhood):
                         res = fun(*index)[indices]
                         if not isinstance(res, tuple):
                             res = (res,)
-                        return field(*res)
+                        if all(map(lambda x: x is not None, res)):
+                            return field(*res)
+                        else:
+                            # neighbor doesn't exist
+                            return None
 
                 return neighs()
 

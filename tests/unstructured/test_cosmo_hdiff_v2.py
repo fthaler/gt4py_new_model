@@ -184,7 +184,7 @@ def test_hdiff(hdiff_reference):
             make_topleftconn(shape),
             make_bottomrightconn(shape),
         ],
-        out_s,
+        [out_s],
         [inp_s, inp_s, inp_s, coeff_s],
     )
 

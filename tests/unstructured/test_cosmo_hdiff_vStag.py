@@ -174,7 +174,7 @@ def test_hdiff(hdiff_reference):
             make_hdiff_connectivity(fx2u),
             make_hdiff_connectivity(fy2u),
         ],
-        out_s,
+        [out_s],
         [inp_s, inp_s, inp_s, inp_s, inp_s, coeff_s],
     )
 

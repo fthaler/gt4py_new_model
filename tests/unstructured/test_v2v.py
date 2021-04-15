@@ -90,7 +90,7 @@ def test_v2v():
     v2v_conn = make_v2v_conn(shape)
 
     apply_stencil(
-        v2v, [inner_domain], [v2v_conn], out1d, [as_field(inp1d, LocationType.Vertex)]
+        v2v, [inner_domain], [v2v_conn], [out1d], [as_field(inp1d, LocationType.Vertex)]
     )
     out2d = as_2d(out1d, shape)
     assert np.allclose(out2d, ref)
@@ -112,7 +112,11 @@ def test_v2v2v():
 
     v2v_conn = make_v2v_conn(shape)
     apply_stencil(
-        v2v2v, [inner_domain], [v2v_conn], out1d, [as_field(inp1d, LocationType.Vertex)]
+        v2v2v,
+        [inner_domain],
+        [v2v_conn],
+        [out1d],
+        [as_field(inp1d, LocationType.Vertex)],
     )
     out2d = as_2d(out1d, shape)
     assert np.allclose(out2d, ref)
@@ -137,7 +141,7 @@ def test_v2v2v_with_v2v():
         v2v2v_with_v2v,
         [inner_domain],
         [v2v_conn],
-        out1d,
+        [out1d],
         [as_field(inp1d, LocationType.Vertex), as_field(inp1d, LocationType.Vertex)],
     )
     out2d = as_2d(out1d, shape)

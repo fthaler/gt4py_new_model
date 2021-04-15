@@ -42,7 +42,7 @@ def test_lap1d():
         laplacian1d,
         [domain],
         [cartesian_connectivity],
-        out,
+        [out],
         [as_field(inp, LocationType.Vertex)],
     )
 
@@ -91,7 +91,7 @@ def test_lap():
         laplacian2d,
         domain,
         [cartesian_connectivity],
-        out,
+        [out],
         [as_field(inp, LocationType.Vertex)],
     )
 

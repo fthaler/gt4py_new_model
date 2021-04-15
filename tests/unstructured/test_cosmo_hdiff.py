@@ -120,7 +120,11 @@ def test_hdiff(hdiff_reference):
     inner_domain = [as_1d(domain_2d[2:-2, 2:-2]).tolist()]
 
     apply_stencil(
-        hdiff, inner_domain, [make_fpconn(shape)], out_s, [inp_s, inp_s, inp_s, coeff_s]
+        hdiff,
+        inner_domain,
+        [make_fpconn(shape)],
+        [out_s],
+        [inp_s, inp_s, inp_s, coeff_s],
     )
 
     assert np.allclose(out[:, :, 0], np.asarray(as_2d(out_s, shape)[2:-2, 2:-2]))

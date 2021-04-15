@@ -93,7 +93,7 @@ def test_hdiff(hdiff_reference):
         hdiff,
         inner_domain,
         [cartesian_connectivity],
-        out_s,
+        [out_s],
         [inp_s, inp_s, inp_s, coeff_s],
     )
 

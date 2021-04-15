@@ -13,6 +13,7 @@
 
 import enum
 import itertools
+from typing import Iterable
 
 
 def ufield(loc):
@@ -81,7 +82,10 @@ def lift(stencil):
     def lifted(*acc):
         class wrap:
             def __getitem__(self, indices):
-                return stencil(*map(lambda x: x[indices], acc))
+                if all(map(lambda x: x[indices] is not None, acc)):
+                    return stencil(*map(lambda x: x[indices], acc))
+                else:
+                    return None
 
         return wrap()
 
@@ -128,7 +132,13 @@ def apply_stencil(
             stencil_args.append(inp)
 
     for indices in itertools.product(*domain):
-        out[indices] = stencil(*map(lambda fun: fun(*indices), stencil_args))
+        res = stencil(*map(lambda fun: fun(*indices), stencil_args))
+        if not isinstance(res, tuple):
+            res = (res,)
+
+        assert len(res) == len(out)
+        for i in range(len(res)):
+            out[i][indices] = res[i]
 
 
 @enum.unique
