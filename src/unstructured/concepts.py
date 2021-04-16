@@ -11,6 +11,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from abc import ABC
 import enum
 import itertools
 from typing import Iterable
@@ -78,6 +79,28 @@ def stencil(*args):
     return _impl
 
 
+class Accessor(ABC):
+    @classmethod
+    def __subclasshook__(cls, C):
+        if hasattr(C, "neighborhoods") and hasattr(C, "__getitem__"):
+            return True
+        return NotImplemented
+
+
+# wrap a plain accessor with its neighborhoodchain
+def accessor(*_neighborhoods):
+    def _impl(plain_acc):  # plain_acc is callable
+        class acc:
+            neighborhoods = _neighborhoods
+
+            def __getitem__(self, *indices):
+                return plain_acc(*indices)
+
+        return acc()
+
+    return _impl
+
+
 def lift(stencil):
     def lifted(*acc):
         class wrap:
@@ -92,6 +115,14 @@ def lift(stencil):
     return lifted
 
 
+class NeighborHood:
+    @classmethod
+    def __subclasshook__(cls, C):
+        if hasattr(C, "in_location") and hasattr(C, "out_location"):
+            return True
+        return NotImplemented
+
+
 def neighborhood(in_loc, out_loc):
     """syntactic sugar to create a neighborhood"""
 
@@ -103,9 +134,14 @@ def neighborhood(in_loc, out_loc):
     return impl
 
 
-def apply_stencil(
-    stencil, domain, connectivities, out, ins
-):  # TODO support multiple output
+def get_neighborhood_from_field(field):
+    if isinstance(field(0), Accessor):
+        return field(0).neighborhoods
+    else:
+        return ()
+
+
+def apply_stencil(stencil, domain, connectivities, out, ins):
     def neighborhood_to_key(neighborhood):
         return type(neighborhood).__name__
 
@@ -119,14 +155,18 @@ def apply_stencil(
     assert len(stencil.acc_neighborhood_chains) == len(ins)
 
     stencil_args = []
-    for inp, nh_chains in zip(ins, stencil.acc_neighborhood_chains):
-        if nh_chains:
-            cur_conn = None
-            for nh in nh_chains:
+    for inp, nh_chain in zip(ins, stencil.acc_neighborhood_chains):
+        cur_conn = None
+        if nh_chain:
+            existing_input_neighborhood = get_neighborhood_from_field(inp)
+            while nh_chain != existing_input_neighborhood:
+                nh, *nh_chain2 = nh_chain  # TODO
+                nh_chain = (*nh_chain2,)
                 if not cur_conn:
                     cur_conn = conn_map[neighborhood_to_key(nh)]
                 else:
                     cur_conn = conn_mult(cur_conn, conn_map[neighborhood_to_key(nh)])
+        if cur_conn:
             stencil_args.append(cur_conn(inp))
         else:
             stencil_args.append(inp)

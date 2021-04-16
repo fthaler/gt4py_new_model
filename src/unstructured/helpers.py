@@ -11,7 +11,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from unstructured.concepts import LocationType, connectivity, ufield
+from unstructured.concepts import LocationType, accessor, connectivity, ufield
 
 
 def as_1d(arr):
@@ -40,18 +40,18 @@ def simple_connectivity(neighborhood):
         def conn(field):
             @ufield(neighborhood.in_location)
             def _field(*index):
-                class neighs:
-                    def __getitem__(self, indices):
-                        res = fun(*index)[indices]
-                        if not isinstance(res, tuple):
-                            res = (res,)
-                        if all(map(lambda x: x is not None, res)):
-                            return field(*res)
-                        else:
-                            # neighbor doesn't exist
-                            return None
+                @accessor(neighborhood)
+                def neighs(indices):
+                    res = fun(*index)[indices]
+                    if not isinstance(res, tuple):
+                        res = (res,)
+                    if all(map(lambda x: x is not None, res)):
+                        return field(*res)
+                    else:
+                        # neighbor doesn't exist
+                        return None
 
-                return neighs()
+                return neighs
 
             return _field
 

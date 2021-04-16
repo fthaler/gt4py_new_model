@@ -1,7 +1,9 @@
 from unstructured.concepts import (
     LocationType,
+    accessor,
     apply_stencil,
     connectivity,
+    get_neighborhood_from_field,
     lift,
     neighborhood,
     stencil,
@@ -65,14 +67,14 @@ def atlas2d_to_field(atlas_field, location_type):
     return as_field(np.array(atlas_field, copy=False)[:, 0], location_type)
 
 
-def sparsefield_to_accessor_field(array, location):
-    @ufield(location)
+def sparsefield_to_accessor_field(array, neighborhood):
+    @ufield(neighborhood.in_location)
     def _field(index):
-        class _accessor:
-            def __getitem__(self, neigh):
-                return array[index, neigh]
+        @accessor(neighborhood)
+        def acc(neigh):
+            return array[index, neigh]
 
-        return _accessor()
+        return acc
 
     return _field
 
@@ -96,7 +98,7 @@ def make_sign_field(mesh, nodes_size, edges_per_node):
                 node2edge_sign[jnode, jedge] = -1.0
                 if is_pole_edge(iedge):
                     node2edge_sign[jnode, jedge] = 1.0
-    return sparsefield_to_accessor_field(node2edge_sign, LocationType.Vertex)
+    return sparsefield_to_accessor_field(node2edge_sign, v2e)
 
 
 def assert_close(expected, actual):
@@ -233,7 +235,7 @@ def compute_zavgS(pp, S_M):
     return S_M * zavg
 
 
-@stencil((v2e, e2v), (v2e,), (), ())  # TODO fix sign should be v2e
+@stencil((v2e, e2v), (v2e,), (v2e,), ())
 def compute_pnabla(pp, S_M, sign, vol):
     pnabla_M = 0
     zavgS = lift(compute_zavgS)(pp, S_M)
@@ -243,7 +245,7 @@ def compute_pnabla(pp, S_M, sign, vol):
     return pnabla_M / vol
 
 
-@stencil((v2e, e2v), (v2e,), (v2e,), (), ())  # TODO fix sign should be v2e
+@stencil((v2e, e2v), (v2e,), (v2e,), (v2e,), ())
 def nabla(pp, S_MXX, S_MYY, sign, vol):
     return compute_pnabla(pp, S_MXX, sign, vol), compute_pnabla(pp, S_MYY, sign, vol)
 
