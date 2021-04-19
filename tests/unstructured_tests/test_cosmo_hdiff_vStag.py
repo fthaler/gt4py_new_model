@@ -24,6 +24,8 @@ from unstructured.concepts import (
 )
 from unstructured.helpers import as_field, simple_connectivity
 
+from .hdiff_reference import hdiff_reference
+
 # (0,0)_u ------------- (0,0)_fx ------------- (1,0)_u
 #    |
 #    |
@@ -130,27 +132,6 @@ def hdiff(inp_u2u, inp_u2fx2u, inp_u2fy2u, inp_u2fx2u2u, inp_u2fy2u2u, coeff):
     return inp_u2u[0, 0] - coeff * (
         flx[0.5, 0] - flx[-0.5, 0] + fly[0, 0.5] - fly[0, -0.5]
     )
-
-
-@pytest.fixture
-def hdiff_reference():
-    shape = (5, 7, 5)
-    rng = np.random.default_rng()
-    inp = rng.normal(size=(shape[0] + 4, shape[1] + 4, shape[2]))
-    coeff = rng.normal(size=shape)
-
-    lap = 4 * inp[1:-1, 1:-1, :] - (
-        inp[2:, 1:-1, :] + inp[:-2, 1:-1, :] + inp[1:-1, 2:, :] + inp[1:-1, :-2, :]
-    )
-    uflx = lap[1:, 1:-1, :] - lap[:-1, 1:-1, :]
-    flx = np.where(uflx * (inp[2:-1, 2:-2, :] - inp[1:-2, 2:-2, :]) > 0, 0, uflx)
-    ufly = lap[1:-1, 1:, :] - lap[1:-1, :-1, :]
-    fly = np.where(ufly * (inp[2:-2, 2:-1, :] - inp[2:-2, 1:-2, :]) > 0, 0, ufly)
-    out = inp[2:-2, 2:-2, :] - coeff * (
-        flx[1:, :, :] - flx[:-1, :, :] + fly[:, 1:, :] - fly[:, :-1, :]
-    )
-
-    return inp, coeff, out
 
 
 def test_hdiff(hdiff_reference):

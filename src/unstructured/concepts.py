@@ -14,7 +14,8 @@
 from abc import ABC
 import enum
 import itertools
-from typing import Iterable
+from typing import Iterable, Tuple, get_args, get_origin
+import inspect
 
 
 def ufield(loc):
@@ -77,6 +78,26 @@ def stencil(*args):
         return decorated_stencil()
 
     return _impl
+
+
+def stencil2(fun):
+    def as_tuple(val):
+        if get_origin(val) is tuple:
+            return get_args(val)
+        else:
+            return (val,)
+
+    args = tuple(
+        as_tuple(fun.__annotations__[a]) for a in inspect.signature(fun).parameters
+    )
+
+    class decorated_stencil:
+        acc_neighborhood_chains = args
+
+        def __call__(self, *args):
+            return fun(*args)
+
+    return decorated_stencil()
 
 
 class Accessor(ABC):
@@ -143,7 +164,10 @@ def get_neighborhood_from_field(field):
 
 def apply_stencil(stencil, domain, connectivities, out, ins):
     def neighborhood_to_key(neighborhood):
-        return type(neighborhood).__name__
+        if not isinstance(neighborhood, type):
+            neighborhood = type(neighborhood)
+
+        return neighborhood.__name__
 
     conn_map = {}
     for c in connectivities:

@@ -24,6 +24,8 @@ from unstructured.concepts import (
 )
 from unstructured.helpers import as_1d, as_2d, as_field, simple_connectivity
 
+from .hdiff_reference import hdiff_reference
+
 
 @neighborhood(LocationType.Vertex, LocationType.Vertex)
 class FivePointNeighborHood:
@@ -35,6 +37,26 @@ class FivePointNeighborHood:
 
 
 fp = FivePointNeighborHood()
+
+
+@neighborhood(LocationType.Vertex, LocationType.Vertex)
+class TopLeftNeighborHood:
+    center = 0
+    left = 1
+    top = 2
+
+
+topleftn = TopLeftNeighborHood()
+
+
+@neighborhood(LocationType.Vertex, LocationType.Vertex)
+class BottomRightNeighborHood:
+    center = 0
+    right = 1
+    bottom = 2
+
+
+bottomrightn = BottomRightNeighborHood()
 
 
 def make_fpconn(shape):
@@ -53,6 +75,34 @@ def make_fpconn(shape):
     return fpconn_neighs
 
 
+def make_topleftconn(shape):
+    strides = [shape[1], 1]
+
+    @simple_connectivity(topleftn)
+    def conn_neighs(index):
+        return [
+            index,
+            index - strides[0],
+            index - strides[1],
+        ]
+
+    return conn_neighs
+
+
+def make_bottomrightconn(shape):
+    strides = [shape[1], 1]
+
+    @simple_connectivity(bottomrightn)
+    def conn_neighs(index):
+        return [
+            index,
+            index + strides[0],
+            index + strides[1],
+        ]
+
+    return conn_neighs
+
+
 @stencil((fp,))
 def laplacian(inp):
     return -4 * inp[fp.center] + (
@@ -60,50 +110,38 @@ def laplacian(inp):
     )
 
 
-@stencil((fp,), (fp, fp))
+@stencil((bottomrightn,), (bottomrightn, fp))
 def hdiff_flux_x(inp1, inp2):
     lap = lift(laplacian)(inp2)
-    flux = lap[fp.center] - lap[fp.right]
+    flux = lap[bottomrightn.center] - lap[bottomrightn.right]
 
-    return 0 if flux * (inp1[fp.right] - inp1[fp.center]) > 0 else flux
+    return (
+        0 if flux * (inp1[bottomrightn.right] - inp1[bottomrightn.center]) > 0 else flux
+    )
 
 
-@stencil((fp,), (fp, fp))
+@stencil((bottomrightn,), (bottomrightn, fp))
 def hdiff_flux_y(inp1, inp2):
     lap = lift(laplacian)(inp2)
-    flux = lap[fp.center] - lap[fp.bottom]
+    flux = lap[bottomrightn.center] - lap[bottomrightn.bottom]
 
-    return 0 if flux * (inp1[fp.bottom] - inp1[fp.center]) > 0 else flux
+    return (
+        0
+        if flux * (inp1[bottomrightn.bottom] - inp1[bottomrightn.center]) > 0
+        else flux
+    )
 
 
-@stencil((fp,), (fp, fp), (fp, fp, fp), ())
+@stencil((topleftn,), (topleftn, bottomrightn), (topleftn, bottomrightn, fp), ())
 def hdiff(inp1, inp2, inp3, coeff):
     flx = lift(hdiff_flux_x)(inp2, inp3)
     fly = lift(hdiff_flux_y)(inp2, inp3)
-    return inp1[fp.center] - coeff * (
-        flx[fp.center] - flx[fp.left] + fly[fp.center] - fly[fp.top]
+    return inp1[topleftn.center] - coeff * (
+        flx[topleftn.center]
+        - flx[topleftn.left]
+        + fly[topleftn.center]
+        - fly[topleftn.top]
     )
-
-
-@pytest.fixture
-def hdiff_reference():
-    shape = (5, 7, 5)
-    rng = np.random.default_rng()
-    inp = rng.normal(size=(shape[0] + 4, shape[1] + 4, shape[2]))
-    coeff = rng.normal(size=shape)
-
-    lap = 4 * inp[1:-1, 1:-1, :] - (
-        inp[2:, 1:-1, :] + inp[:-2, 1:-1, :] + inp[1:-1, 2:, :] + inp[1:-1, :-2, :]
-    )
-    uflx = lap[1:, 1:-1, :] - lap[:-1, 1:-1, :]
-    flx = np.where(uflx * (inp[2:-1, 2:-2, :] - inp[1:-2, 2:-2, :]) > 0, 0, uflx)
-    ufly = lap[1:-1, 1:, :] - lap[1:-1, :-1, :]
-    fly = np.where(ufly * (inp[2:-2, 2:-1, :] - inp[2:-2, 1:-2, :]) > 0, 0, ufly)
-    out = inp[2:-2, 2:-2, :] - coeff * (
-        flx[1:, :, :] - flx[:-1, :, :] + fly[:, 1:, :] - fly[:, :-1, :]
-    )
-
-    return inp, coeff, out
 
 
 def test_hdiff(hdiff_reference):
@@ -122,7 +160,11 @@ def test_hdiff(hdiff_reference):
     apply_stencil(
         hdiff,
         inner_domain,
-        [make_fpconn(shape)],
+        [
+            make_fpconn(shape),
+            make_topleftconn(shape),
+            make_bottomrightconn(shape),
+        ],
         [out_s],
         [inp_s, inp_s, inp_s, coeff_s],
     )

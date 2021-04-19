@@ -25,6 +25,7 @@ from unstructured.concepts import (
 from unstructured.helpers import as_field
 from unstructured.cartesian import CartesianNeighborHood
 
+from .hdiff_reference import hdiff_reference
 
 cart = CartesianNeighborHood()
 
@@ -83,27 +84,6 @@ def hdiff(inp, coeff):
     flx = lift(hdiff_flux_x)(inp)
     fly = lift(hdiff_flux_y)(inp)
     return inp[0, 0]() - coeff * (flx[0, 0] - flx[-1, 0] + fly[0, 0] - fly[0, -1])
-
-
-@pytest.fixture
-def hdiff_reference():
-    shape = (5, 7, 5)
-    rng = np.random.default_rng()
-    inp = rng.normal(size=(shape[0] + 4, shape[1] + 4, shape[2]))
-    coeff = rng.normal(size=shape)
-
-    lap = 4 * inp[1:-1, 1:-1, :] - (
-        inp[2:, 1:-1, :] + inp[:-2, 1:-1, :] + inp[1:-1, 2:, :] + inp[1:-1, :-2, :]
-    )
-    uflx = lap[1:, 1:-1, :] - lap[:-1, 1:-1, :]
-    flx = np.where(uflx * (inp[2:-1, 2:-2, :] - inp[1:-2, 2:-2, :]) > 0, 0, uflx)
-    ufly = lap[1:-1, 1:, :] - lap[1:-1, :-1, :]
-    fly = np.where(ufly * (inp[2:-2, 2:-1, :] - inp[2:-2, 1:-2, :]) > 0, 0, ufly)
-    out = inp[2:-2, 2:-2, :] - coeff * (
-        flx[1:, :, :] - flx[:-1, :, :] + fly[:, 1:, :] - fly[:, :-1, :]
-    )
-
-    return inp, coeff, out
 
 
 def test_hdiff(hdiff_reference):
