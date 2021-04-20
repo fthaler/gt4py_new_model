@@ -18,7 +18,7 @@ from unstructured.concepts import LocationType, apply_stencil, stencil
 from unstructured.helpers import as_field, as_1d, as_2d
 
 
-@stencil(())
+@stencil
 def copy(acc_in):
     return acc_in
 

@@ -67,20 +67,7 @@ def conn_mult(conn_a, conn_b):
     return conn()
 
 
-def stencil(*args):
-    def _impl(fun):
-        class decorated_stencil:
-            acc_neighborhood_chains = args
-
-            def __call__(self, *args):
-                return fun(*args)
-
-        return decorated_stencil()
-
-    return _impl
-
-
-def stencil2(fun):
+def stencil(fun):
     def as_tuple(val):
         if get_origin(val) is tuple:
             return get_args(val)
@@ -88,7 +75,8 @@ def stencil2(fun):
             return (val,)
 
     args = tuple(
-        as_tuple(fun.__annotations__[a]) for a in inspect.signature(fun).parameters
+        as_tuple(fun.__annotations__[a]) if a in fun.__annotations__ else tuple()
+        for a in inspect.signature(fun).parameters
     )
 
     class decorated_stencil:
@@ -169,6 +157,9 @@ def apply_stencil(stencil, domain, connectivities, out, ins):
 
         return neighborhood.__name__
 
+    def neighborhood_chain_to_key(chain):
+        return tuple(neighborhood_to_key(k) for k in chain)
+
     conn_map = {}
     for c in connectivities:
         assert (
@@ -182,8 +173,10 @@ def apply_stencil(stencil, domain, connectivities, out, ins):
     for inp, nh_chain in zip(ins, stencil.acc_neighborhood_chains):
         cur_conn = None
         if nh_chain:
-            existing_input_neighborhood = get_neighborhood_from_field(inp)
-            while nh_chain != existing_input_neighborhood:
+            existing_input_neighborhood = neighborhood_chain_to_key(
+                get_neighborhood_from_field(inp)
+            )
+            while neighborhood_chain_to_key(nh_chain) != existing_input_neighborhood:
                 nh, *nh_chain2 = nh_chain  # TODO
                 nh_chain = (*nh_chain2,)
                 if not cur_conn:

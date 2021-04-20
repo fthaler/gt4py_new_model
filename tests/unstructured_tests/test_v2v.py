@@ -20,9 +20,8 @@ from unstructured.concepts import (
     apply_stencil,
     neighborhood,
     connectivity,
-    stencil,
     lift,
-    stencil2,
+    stencil,
     ufield,
 )
 from unstructured.helpers import as_1d, as_2d, as_field
@@ -58,22 +57,18 @@ def make_v2v_conn(shape_2d):
 vv = V2VNeighborHood()
 
 
-# @stencil((vv,))
-# def v2v(acc_in):
-#     return acc_in[vv.left] + acc_in[vv.right] + acc_in[vv.top] + acc_in[vv.bottom]
-@stencil2
+@stencil
 def v2v(acc_in: V2VNeighborHood):
     return acc_in[vv.left] + acc_in[vv.right] + acc_in[vv.top] + acc_in[vv.bottom]
 
 
-@stencil2
+@stencil
 def v2v2v(acc_in: Tuple[V2VNeighborHood, V2VNeighborHood]):
     x = lift(v2v)(acc_in)
     return v2v(x)
 
 
-# @stencil((vv, vv), (vv,))
-@stencil2
+@stencil
 def v2v2v_with_v2v(in2: Tuple[V2VNeighborHood, V2VNeighborHood], in1: V2VNeighborHood):
     x = lift(v2v)(in2)
     return v2v(x) + in1[vv.left] + in1[vv.right]

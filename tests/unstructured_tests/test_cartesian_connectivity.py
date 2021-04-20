@@ -16,13 +16,10 @@ from numpy.core.numeric import outer
 
 from unstructured.concepts import (
     LocationType,
-    apply_stencil,
     connectivity,
-    neighborhood,
-    stencil,
     ufield,
 )
-from unstructured.helpers import as_field, simple_connectivity
+from unstructured.helpers import as_field
 from unstructured.cartesian import CartesianNeighborHood
 
 cart = CartesianNeighborHood()

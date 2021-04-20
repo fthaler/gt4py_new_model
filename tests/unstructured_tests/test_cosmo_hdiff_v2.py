@@ -12,8 +12,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import math
+from typing import Tuple
 import numpy as np
-import pytest
 
 from unstructured.concepts import (
     LocationType,
@@ -103,15 +103,18 @@ def make_bottomrightconn(shape):
     return conn_neighs
 
 
-@stencil((fp,))
-def laplacian(inp):
+@stencil
+def laplacian(inp: FivePointNeighborHood):
     return -4 * inp[fp.center] + (
         inp[fp.right] + inp[fp.left] + inp[fp.bottom] + inp[fp.top]
     )
 
 
-@stencil((bottomrightn,), (bottomrightn, fp))
-def hdiff_flux_x(inp1, inp2):
+@stencil
+def hdiff_flux_x(
+    inp1: BottomRightNeighborHood,
+    inp2: Tuple[BottomRightNeighborHood, FivePointNeighborHood],
+):
     lap = lift(laplacian)(inp2)
     flux = lap[bottomrightn.center] - lap[bottomrightn.right]
 
@@ -120,8 +123,11 @@ def hdiff_flux_x(inp1, inp2):
     )
 
 
-@stencil((bottomrightn,), (bottomrightn, fp))
-def hdiff_flux_y(inp1, inp2):
+@stencil
+def hdiff_flux_y(
+    inp1: BottomRightNeighborHood,
+    inp2: Tuple[BottomRightNeighborHood, FivePointNeighborHood],
+):
     lap = lift(laplacian)(inp2)
     flux = lap[bottomrightn.center] - lap[bottomrightn.bottom]
 
@@ -132,8 +138,13 @@ def hdiff_flux_y(inp1, inp2):
     )
 
 
-@stencil((topleftn,), (topleftn, bottomrightn), (topleftn, bottomrightn, fp), ())
-def hdiff(inp1, inp2, inp3, coeff):
+@stencil
+def hdiff(
+    inp1: TopLeftNeighborHood,
+    inp2: Tuple[TopLeftNeighborHood, BottomRightNeighborHood],
+    inp3: Tuple[TopLeftNeighborHood, BottomRightNeighborHood, FivePointNeighborHood],
+    coeff,
+):
     flx = lift(hdiff_flux_x)(inp2, inp3)
     fly = lift(hdiff_flux_y)(inp2, inp3)
     return inp1[topleftn.center] - coeff * (

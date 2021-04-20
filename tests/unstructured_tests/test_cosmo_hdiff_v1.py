@@ -12,8 +12,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import math
+from typing import Tuple
 import numpy as np
-import pytest
 
 from unstructured.concepts import (
     LocationType,
@@ -55,31 +55,42 @@ def make_fpconn(shape):
     return fpconn_neighs
 
 
-@stencil((fp,))
-def laplacian(inp):
+@stencil
+def laplacian(inp: FivePointNeighborHood):
     return -4 * inp[fp.center] + (
         inp[fp.right] + inp[fp.left] + inp[fp.bottom] + inp[fp.top]
     )
 
 
-@stencil((fp,), (fp, fp))
-def hdiff_flux_x(inp1, inp2):
+@stencil
+def hdiff_flux_x(
+    inp1: FivePointNeighborHood,
+    inp2: Tuple[FivePointNeighborHood, FivePointNeighborHood],
+):
     lap = lift(laplacian)(inp2)
     flux = lap[fp.center] - lap[fp.right]
 
     return 0 if flux * (inp1[fp.right] - inp1[fp.center]) > 0 else flux
 
 
-@stencil((fp,), (fp, fp))
-def hdiff_flux_y(inp1, inp2):
+@stencil
+def hdiff_flux_y(
+    inp1: FivePointNeighborHood,
+    inp2: Tuple[FivePointNeighborHood, FivePointNeighborHood],
+):
     lap = lift(laplacian)(inp2)
     flux = lap[fp.center] - lap[fp.bottom]
 
     return 0 if flux * (inp1[fp.bottom] - inp1[fp.center]) > 0 else flux
 
 
-@stencil((fp,), (fp, fp), (fp, fp, fp), ())
-def hdiff(inp1, inp2, inp3, coeff):
+@stencil
+def hdiff(
+    inp1: FivePointNeighborHood,
+    inp2: Tuple[FivePointNeighborHood, FivePointNeighborHood],
+    inp3: Tuple[FivePointNeighborHood, FivePointNeighborHood, FivePointNeighborHood],
+    coeff,
+):
     flx = lift(hdiff_flux_x)(inp2, inp3)
     fly = lift(hdiff_flux_y)(inp2, inp3)
     return inp1[fp.center] - coeff * (

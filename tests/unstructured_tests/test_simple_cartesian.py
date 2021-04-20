@@ -17,17 +17,16 @@ from numpy.core.numeric import outer
 from unstructured.concepts import (
     LocationType,
     apply_stencil,
-    neighborhood,
     stencil,
 )
-from unstructured.helpers import as_field, simple_connectivity
+from unstructured.helpers import as_field
 from unstructured.cartesian import CartesianNeighborHood, cartesian_connectivity
 
 cart = CartesianNeighborHood()
 
 
-@stencil((cart,))
-def laplacian1d(inp):
+@stencil
+def laplacian1d(inp: CartesianNeighborHood):
     return -2 * inp[0] + (inp[-1] + inp[1])
 
 
@@ -55,8 +54,8 @@ def test_lap1d():
 test_lap1d()
 
 
-@stencil((cart,))
-def laplacian2d(inp):
+@stencil
+def laplacian2d(inp: CartesianNeighborHood):
     return -4 * inp[0, 0] + (inp[-1, 0] + inp[1, 0] + inp[0, -1] + inp[0, 1])
 
 

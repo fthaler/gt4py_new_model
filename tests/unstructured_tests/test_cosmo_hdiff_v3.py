@@ -11,18 +11,16 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import math
+from typing import Tuple
 import numpy as np
-import pytest
 
 from unstructured.concepts import (
     LocationType,
     apply_stencil,
     lift,
-    neighborhood,
     stencil,
 )
-from unstructured.helpers import as_1d, as_2d, as_field, simple_connectivity
+from unstructured.helpers import as_field
 from unstructured.cartesian import CartesianNeighborHood, cartesian_connectivity
 
 from .hdiff_reference import hdiff_reference
@@ -30,29 +28,40 @@ from .hdiff_reference import hdiff_reference
 cart = CartesianNeighborHood()
 
 
-@stencil((cart,))
-def laplacian(inp):
+@stencil
+def laplacian(inp: CartesianNeighborHood):
     return -4 * inp[0, 0] + (inp[-1, 0] + inp[1, 0] + inp[0, -1] + inp[0, 1])
 
 
-@stencil((cart,), (cart, cart))
-def hdiff_flux_x(inp1, inp2):
+@stencil
+def hdiff_flux_x(
+    inp1: CartesianNeighborHood,
+    inp2: Tuple[CartesianNeighborHood, CartesianNeighborHood],
+):
     lap = lift(laplacian)(inp2)
     flux = lap[0, 0] - lap[1, 0]
 
     return 0 if flux * (inp1[1, 0] - inp1[0, 0]) > 0 else flux
 
 
-@stencil((cart,), (cart, cart))
-def hdiff_flux_y(inp1, inp2):
+@stencil
+def hdiff_flux_y(
+    inp1: CartesianNeighborHood,
+    inp2: Tuple[CartesianNeighborHood, CartesianNeighborHood],
+):
     lap = lift(laplacian)(inp2)
     flux = lap[0, 0] - lap[0, 1]
 
     return 0 if flux * (inp1[0, 1] - inp1[0, 0]) > 0 else flux
 
 
-@stencil((cart,), (cart, cart), (cart, cart, cart), ())
-def hdiff(inp1, inp2, inp3, coeff):
+@stencil
+def hdiff(
+    inp1: CartesianNeighborHood,
+    inp2: Tuple[CartesianNeighborHood, CartesianNeighborHood],
+    inp3: Tuple[CartesianNeighborHood, CartesianNeighborHood, CartesianNeighborHood],
+    coeff,
+):
     flx = lift(hdiff_flux_x)(inp2, inp3)
     fly = lift(hdiff_flux_y)(inp2, inp3)
     return inp1[0, 0] - coeff * (flx[0, 0] - flx[-1, 0] + fly[0, 0] - fly[0, -1])

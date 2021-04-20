@@ -11,12 +11,11 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from typing import Tuple
 from unstructured.concepts import (
     LocationType,
     accessor,
     apply_stencil,
-    connectivity,
-    get_neighborhood_from_field,
     lift,
     neighborhood,
     stencil,
@@ -242,14 +241,16 @@ def make_mesh():
     return mesh, fs_edges, fs_nodes, edges_per_node
 
 
-@stencil((e2v,), ())
-def compute_zavgS(pp, S_M):
+@stencil
+def compute_zavgS(pp: Edge2Vertex, S_M):
     zavg = 0.5 * (pp[0] + pp[1])
     return S_M * zavg
 
 
-@stencil((v2e, e2v), (v2e,), (v2e,), ())
-def compute_pnabla(pp, S_M, sign, vol):
+@stencil
+def compute_pnabla(
+    pp: Tuple[Vertex2Edge, Edge2Vertex], S_M: Vertex2Edge, sign: Vertex2Edge, vol
+):
     pnabla_M = 0
     zavgS = lift(compute_zavgS)(pp, S_M)
     for i in range(7):
@@ -258,8 +259,14 @@ def compute_pnabla(pp, S_M, sign, vol):
     return pnabla_M / vol
 
 
-@stencil((v2e, e2v), (v2e,), (v2e,), (v2e,), ())
-def nabla(pp, S_MXX, S_MYY, sign, vol):
+@stencil
+def nabla(
+    pp: Tuple[Vertex2Edge, Edge2Vertex],
+    S_MXX: Vertex2Edge,
+    S_MYY: Vertex2Edge,
+    sign: Vertex2Edge,
+    vol,
+):
     return compute_pnabla(pp, S_MXX, sign, vol), compute_pnabla(pp, S_MYY, sign, vol)
 
 

@@ -12,7 +12,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import numpy as np
-import pytest
 
 from unstructured.concepts import (
     LocationType,
@@ -58,29 +57,29 @@ def all_rank_cartesian_connectivity(field):
     return _field
 
 
-@stencil((cart,))
-def laplacian(inp):
+@stencil
+def laplacian(inp: CartesianNeighborHood):
     return -4 * inp[0, 0]() + (inp[-1, 0]() + inp[1, 0]() + inp[0, -1]() + inp[0, 1]())
 
 
-@stencil((cart,))
-def hdiff_flux_x(inp):
+@stencil
+def hdiff_flux_x(inp: CartesianNeighborHood):
     lap = lift(laplacian)(inp)
     flux = lap[0, 0] - lap[1, 0]
 
     return 0 if flux * (inp[1, 0]() - inp[0, 0]()) > 0 else flux
 
 
-@stencil((cart,))
-def hdiff_flux_y(inp):
+@stencil
+def hdiff_flux_y(inp: CartesianNeighborHood):
     lap = lift(laplacian)(inp)
     flux = lap[0, 0] - lap[0, 1]
 
     return 0 if flux * (inp[0, 1]() - inp[0, 0]()) > 0 else flux
 
 
-@stencil((cart,), ())
-def hdiff(inp, coeff):
+@stencil
+def hdiff(inp: CartesianNeighborHood, coeff):
     flx = lift(hdiff_flux_x)(inp)
     fly = lift(hdiff_flux_y)(inp)
     return inp[0, 0]() - coeff * (flx[0, 0] - flx[-1, 0] + fly[0, 0] - fly[0, -1])

@@ -12,12 +12,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import enum
+from typing import Tuple
 import numpy as np
-import pytest
 
 from unstructured.concepts import (
     apply_stencil,
-    conn_mult,
     lift,
     neighborhood,
     stencil,
@@ -104,29 +103,36 @@ fx2u = FX2U()
 fy2u = FY2U()
 
 
-@stencil((u2u,))
-def laplacian(inp):
+@stencil
+def laplacian(inp: U2U):
     return -4 * inp[0, 0] + (inp[-1, 0] + inp[1, 0] + inp[0, -1] + inp[0, 1])
 
 
-@stencil((fx2u,), (fx2u, u2u))
-def hdiff_flux_x(inp1, inp2):
+@stencil
+def hdiff_flux_x(inp1: FX2U, inp2: Tuple[FX2U, U2U]):
     lap = lift(laplacian)(inp2)
     flux = lap[-0.5, 0] - lap[0.5, 0]  # flux = lap[0, 0] - lap[1, 0]
 
     return 0 if flux * (inp1[0.5, 0] - inp1[-0.5, 0]) > 0 else flux
 
 
-@stencil((fy2u,), (fy2u, u2u))
-def hdiff_flux_y(inp1, inp2):
+@stencil
+def hdiff_flux_y(inp1: FY2U, inp2: Tuple[FY2U, U2U]):
     lap = lift(laplacian)(inp2)
     flux = lap[0, -0.5] - lap[0, 0.5]  # flux = lap[0, 0] - lap[0, 1]
 
     return 0 if flux * (inp1[0, 0.5] - inp1[0, -0.5]) > 0 else flux
 
 
-@stencil((u2u,), (u2fx, fx2u), (u2fy, fy2u), (u2fx, fx2u, u2u), (u2fy, fy2u, u2u), ())
-def hdiff(inp_u2u, inp_u2fx2u, inp_u2fy2u, inp_u2fx2u2u, inp_u2fy2u2u, coeff):
+@stencil
+def hdiff(
+    inp_u2u: U2U,
+    inp_u2fx2u: Tuple[U2FX, FX2U],
+    inp_u2fy2u: Tuple[U2FY, FY2U],
+    inp_u2fx2u2u: Tuple[U2FX, FX2U, U2U],
+    inp_u2fy2u2u: Tuple[U2FY, FY2U, U2U],
+    coeff,
+):
     flx = lift(hdiff_flux_x)(inp_u2fx2u, inp_u2fx2u2u)
     fly = lift(hdiff_flux_y)(inp_u2fy2u, inp_u2fy2u2u)
     return inp_u2u[0, 0] - coeff * (
