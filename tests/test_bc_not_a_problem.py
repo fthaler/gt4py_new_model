@@ -52,9 +52,6 @@ def test_bc_1level():
     assert np.all(ref == np.asarray(out)[:, :, :])
 
 
-test_bc_1level()
-
-
 def test_bc_2level_fencil():
     shape = (7, 5, 3)
 
@@ -88,9 +85,6 @@ def test_bc_2level_fencil():
     apply(tmp_s, inp, bc_field1, domain=domain(shape[0], shape[1], shape[2]))
     apply(out, tmp_s, bc_field2, domain=domain(shape[0], shape[1], shape[2]))
     assert np.all(ref == np.asarray(out)[:, :, :])
-
-
-test_bc_2level_fencil()
 
 
 @polymorphic_stencil
@@ -132,6 +126,3 @@ def test_bc_2level_stencil():
 
     apply(out, inp, bc_field1, bc_field2, domain=domain(shape[0], shape[1], shape[2]))
     assert np.all(ref == np.asarray(out)[:, :, :])
-
-
-test_bc_2level_stencil()
