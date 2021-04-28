@@ -91,6 +91,34 @@ def sparsefield_to_accessor_field(array, neighborhood):
     return _field
 
 
+def make_mesh():
+    edges_per_node = 7  # TODO
+
+    grid = StructuredGrid("O32")
+    config = Config()
+    config["triangulate"] = True
+    config["angle"] = 20.0
+
+    mesh = StructuredMeshGenerator(config).generate(grid)
+
+    fs_edges = functionspace.EdgeColumns(mesh, halo=1)
+    fs_nodes = functionspace.NodeColumns(mesh, halo=1)
+
+    build_edges(mesh)
+    build_node_to_edge_connectivity(mesh)
+    build_median_dual_mesh(mesh)
+
+    return mesh, fs_edges, fs_nodes, edges_per_node
+
+
+@stencil
+def sign_stencil(node_id, pole_edge, nodes_indices: Edge2Vertex):
+    if pole_edge or node_id == nodes_indices[0]:
+        return 1.0
+    else:
+        return -1.0
+
+
 def make_sign_field(mesh, nodes_size, edges_per_node):
     node2edge_sign = np.zeros((nodes_size, edges_per_node))
     edge_flags = np.array(mesh.edges.flags())
@@ -116,6 +144,45 @@ def make_sign_field(mesh, nodes_size, edges_per_node):
 def assert_close(expected, actual):
     assert math.isclose(expected, actual), "expected={}, actual={}".format(
         expected, actual
+    )
+
+
+def test_sign_field():
+    @stencil
+    def validate_sign(
+        node_index,
+        pole_edges: Vertex2Edge,
+        nodes_indices: Tuple[Vertex2Edge, Edge2Vertex],
+        external_sign: Vertex2Edge,
+    ):
+        sign_acc = lift(sign_stencil)(node_index, pole_edges, nodes_indices)
+        for i in range(7):
+            if sign_acc[i] and external_sign[i]:
+                assert sign_acc[i] == external_sign[i]
+
+    mesh, fs_edges, fs_nodes, edges_per_node = make_mesh()
+    sign_acc = make_sign_field(mesh, fs_nodes.size, edges_per_node)  # acc of rank 1
+
+    edge_flags = np.array(mesh.edges.flags())
+    pole_edges = as_field(
+        np.array([Topology.check(flag, Topology.POLE) for flag in edge_flags]),
+        LocationType.Edge,
+    )
+    index_field = as_field(np.array(range(fs_nodes.size)), LocationType.Vertex)
+
+    nodes_domain = list(range(fs_nodes.size))
+
+    out = np.zeros((fs_nodes.size,))
+
+    apply_stencil(
+        validate_sign,
+        [nodes_domain],
+        [
+            make_connectivity_from_atlas(mesh.edges.node_connectivity, e2v),
+            make_connectivity_from_atlas(mesh.nodes.edge_connectivity, v2e),
+        ],
+        [out],
+        [index_field, pole_edges, index_field, sign_acc],
     )
 
 
@@ -221,26 +288,6 @@ def make_input_field(mesh, fs_nodes, edges_per_node):
     return as_field(rzs[:, klevel], LocationType.Vertex)
 
 
-def make_mesh():
-    edges_per_node = 7  # TODO
-
-    grid = StructuredGrid("O32")
-    config = Config()
-    config["triangulate"] = True
-    config["angle"] = 20.0
-
-    mesh = StructuredMeshGenerator(config).generate(grid)
-
-    fs_edges = functionspace.EdgeColumns(mesh, halo=1)
-    fs_nodes = functionspace.NodeColumns(mesh, halo=1)
-
-    build_edges(mesh)
-    build_node_to_edge_connectivity(mesh)
-    build_median_dual_mesh(mesh)
-
-    return mesh, fs_edges, fs_nodes, edges_per_node
-
-
 @stencil
 def compute_zavgS(pp: Edge2Vertex, S_M):
     zavg = 0.5 * (pp[0] + pp[1])
@@ -334,5 +381,56 @@ def test_nabla():
     assert_close(3.3540113705465301e-003, max(pnabla_MYY))
 
 
+@stencil
+def nabla_from_sign_stencil(
+    pp: Tuple[Vertex2Edge, Edge2Vertex],
+    S_MXX: Vertex2Edge,
+    S_MYY: Vertex2Edge,
+    vol,
+    node_index,
+    pole_edges: Vertex2Edge,
+    nodes_indices: Tuple[Vertex2Edge, Edge2Vertex],
+):
+    sign_acc = lift(sign_stencil)(node_index, pole_edges, nodes_indices)
+    return compute_pnabla(pp, S_MXX, sign_acc, vol), compute_pnabla(
+        pp, S_MYY, sign_acc, vol
+    )
+
+
+def test_nabla_from_sign_stencil():
+    mesh, fs_edges, fs_nodes, edges_per_node = make_mesh()
+
+    pp = make_input_field(mesh, fs_nodes, edges_per_node)
+    S_MXX, S_MYY = make_S(mesh, fs_edges)
+    vol = make_vol(mesh)
+
+    edge_flags = np.array(mesh.edges.flags())
+    pole_edges = as_field(
+        np.array([Topology.check(flag, Topology.POLE) for flag in edge_flags]),
+        LocationType.Edge,
+    )
+    index_field = as_field(np.array(range(fs_nodes.size)), LocationType.Vertex)
+
+    nodes_domain = list(range(fs_nodes.size))
+
+    pnabla_MXX = np.zeros((fs_nodes.size))
+    pnabla_MYY = np.zeros((fs_nodes.size))
+    apply_stencil(
+        nabla_from_sign_stencil,
+        [nodes_domain],
+        [
+            make_connectivity_from_atlas(mesh.edges.node_connectivity, e2v),
+            make_connectivity_from_atlas(mesh.nodes.edge_connectivity, v2e),
+        ],
+        [pnabla_MXX, pnabla_MYY],
+        [pp, S_MXX, S_MYY, vol, index_field, pole_edges, index_field],
+    )
+
+    assert_close(-3.5455427772566003e-003, min(pnabla_MXX))
+    assert_close(3.5455427772565435e-003, max(pnabla_MXX))
+    assert_close(-3.3540113705465301e-003, min(pnabla_MYY))
+    assert_close(3.3540113705465301e-003, max(pnabla_MYY))
+
+
 if __name__ == "__main__":
-    test_nabla()
+    test_nabla_from_sign_stencil()

@@ -114,8 +114,17 @@ def lift(stencil):
     def lifted(*acc):
         class wrap:
             def __getitem__(self, indices):
-                if all(map(lambda x: x[indices] is not None, acc)):
-                    return stencil(*map(lambda x: x[indices], acc))
+                if all(
+                    map(
+                        lambda x: not isinstance(x, Accessor) or x[indices] is not None,
+                        acc,
+                    )
+                ):
+                    return stencil(
+                        *map(
+                            lambda x: x[indices] if isinstance(x, Accessor) else x, acc
+                        )
+                    )
                 else:
                     return None
 
