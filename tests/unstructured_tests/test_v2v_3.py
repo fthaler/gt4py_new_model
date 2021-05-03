@@ -165,6 +165,7 @@ def lift(conn):
 
 @stencil
 def v2v(vv_conn, v_field):
+    acc = vv_conn(v_field)
     acc = vv_conn(v_field)()
     return acc[0] + acc[1] + acc[2] + acc[3]
 
@@ -174,10 +175,12 @@ def v2v(vv_conn, v_field):
 #     x = lift(vv_conn)(v2v)(vv_conn, v_field)  # should give me an accessor field
 #     return v2v(vv_conn, x)
 
+magic_index = 0
+
 
 @stencil
 def identity(vv_conn, v_field):
-    return v2v(vv_conn, v_field)
+    return v2v(vv_conn, v_field)(magic_index)
 
 
 # @stencil
@@ -188,6 +191,7 @@ def identity(vv_conn, v_field):
 
 def apply_stencil(stencil, domain, connectivities_and_in_fields, out):
     for indices in itertools.product(*domain):
+        magic_index = indices[0]
         res = stencil(*connectivities_and_in_fields)(*indices)
         if not isinstance(res, tuple):
             res = (res,)

@@ -46,127 +46,93 @@ def make_v2v_conn(shape_2d):
     return v2v_conn()
 
 
-def is_connectivity(arg):
-    return hasattr(arg, "a_connectivity")
+# def is_connectivity(arg):
+#     return hasattr(arg, "a_connectivity")
 
 
 # - field is a function that takes index and returns value
 # - stencil is a function that takes fields and returns fields
 
 
-def stencil(sten):
-    def wrapped_stencil(*connectivities_and_fields):
-        def inner(index):
-            class new_field:
-                def __init__(self, field):
-                    self.field = field
+# def stencil(sten):
+#     def wrapped_stencil(*connectivities_and_fields):
+#         def inner(index):
+#             class new_field:
+#                 def __init__(self, field):
+#                     self.field = field
 
-                def __call__(self):
-                    return self.field(index)
+#                 def __call__(self):
+#                     return self.field(index)
 
-            def wrap_field(_field):
-                return new_field(_field)
+#             def wrap_field(_field):
+#                 return new_field(_field)
 
-            def wrap_connectivity(conn):
-                def wrapped_conn(field):
-                    return new_field(conn(field.field))
+#             def wrap_connectivity(conn):
+#                 def wrapped_conn(field):
+#                     return new_field(conn(field.field))
 
-                return wrapped_conn
+#                 return wrapped_conn
 
-            wrapped_connectivities_and_fields = (
-                wrap_connectivity(arg) if is_connectivity(arg) else wrap_field(arg)
-                for arg in connectivities_and_fields
-            )
+#             wrapped_connectivities_and_fields = (
+#                 wrap_connectivity(arg) if is_connectivity(arg) else wrap_field(arg)
+#                 for arg in connectivities_and_fields
+#             )
 
-            return sten(*wrapped_connectivities_and_fields)
+#             return sten(*wrapped_connectivities_and_fields)
 
-        return inner
+#         return inner
 
-    return wrapped_stencil
-
-
-def v2v_explicit(*connectivities_and_fields):
-    def inner(index):
-        class new_field:
-            def __init__(self, field):
-                self.field = field
-
-            def __call__(self):
-                return self.field(index)
-
-        def wrap_field(_field):
-            return new_field(_field)
-
-        def wrap_connectivity(conn):
-            def wrapped_conn(field):
-                return new_field(conn(field.field))
-
-            return wrapped_conn
-
-        wrapped_connectivities_and_fields = (
-            wrap_connectivity(arg) if is_connectivity(arg) else wrap_field(arg)
-            for arg in connectivities_and_fields
-        )
-
-        def original(vv_conn, v_field):
-            acc = vv_conn(v_field)()
-            return acc[0] + acc[1] + acc[2] + acc[3]
-
-        return original(*wrapped_connectivities_and_fields)
-
-    return inner
+#     return wrapped_stencil
 
 
-# @neighborhood(LocationType.Vertex, LocationType.Vertex)
-# class V2VNeighborHood:
-#     right = 0
-#     left = 1
-#     top = 2
-#     bottom = 3
+# def v2v_explicit(*connectivities_and_fields):
+#     def inner(index):
+#         class new_field:
+#             def __init__(self, field):
+#                 self.field = field
+
+#             def __call__(self):
+#                 return self.field(index)
+
+#         def wrap_field(_field):
+#             return new_field(_field)
+
+#         def wrap_connectivity(conn):
+#             def wrapped_conn(field):
+#                 return new_field(conn(field.field))
+
+#             return wrapped_conn
+
+#         wrapped_connectivities_and_fields = (
+#             wrap_connectivity(arg) if is_connectivity(arg) else wrap_field(arg)
+#             for arg in connectivities_and_fields
+#         )
+
+#         def original(vv_conn, v_field):
+#             acc = vv_conn(v_field)()
+#             return acc[0] + acc[1] + acc[2] + acc[3]
+
+#         return original(*wrapped_connectivities_and_fields)
+
+#     return inner
 
 
-# def make_v2v_conn(shape_2d):
-#     strides = [1, shape_2d[1]]
+def v2v_explicit(index):
+    def stencil(vv_conn, v_field):
+        acc = vv_conn(v_field)(index)
+        return acc[0] + acc[1] + acc[2] + acc[3]
 
-#     @connectivity(V2VNeighborHood())
-#     def v2v_conn(field):
-#         @ufield(LocationType.Vertex)
-#         def _field(index):
-#             return [
-#                 field(index + strides[0]),
-#                 field(index - strides[0]),
-#                 field(index + strides[1]),
-#                 field(index - strides[1]),
-#             ]
-
-#         return _field
-
-#     return v2v_conn
+    return stencil
 
 
-# vv = V2VNeighborHood()
+def identity(index):
+    return v2v_explicit(index)
 
 
 # @stencil
-# def v2v2v(acc_in: Tuple[V2VNeighborHood, V2VNeighborHood]):
-#     x = lift(v2v)(acc_in)
-#     return v2v(x)
-
-
-def lift(conn):
-    def concrete_lift(sten):
-        def lifted_stencil(*args):
-            ...
-
-        return lifted_stencil
-
-    return concrete_lift
-
-
-@stencil
-def v2v(vv_conn, v_field):
-    acc = vv_conn(v_field)()
-    return acc[0] + acc[1] + acc[2] + acc[3]
+# def v2v(vv_conn, v_field):
+#     acc = vv_conn(v_field)()
+#     return acc[0] + acc[1] + acc[2] + acc[3]
 
 
 # @stencil
@@ -175,9 +141,9 @@ def v2v(vv_conn, v_field):
 #     return v2v(vv_conn, x)
 
 
-@stencil
-def identity(vv_conn, v_field):
-    return v2v(vv_conn, v_field)
+# @stencil
+# def identity(vv_conn, v_field):
+#     return v2v(vv_conn, v_field)
 
 
 # @stencil
@@ -186,15 +152,15 @@ def identity(vv_conn, v_field):
 #     return v2v(x) + in1[vv.left] + in1[vv.right]
 
 
-def apply_stencil(stencil, domain, connectivities_and_in_fields, out):
-    for indices in itertools.product(*domain):
-        res = stencil(*connectivities_and_in_fields)(*indices)
-        if not isinstance(res, tuple):
-            res = (res,)
+# def apply_stencil(stencil, domain, connectivities_and_in_fields, out):
+#     for indices in itertools.product(*domain):
+#         res = stencil(*connectivities_and_in_fields)(*indices)
+#         if not isinstance(res, tuple):
+#             res = (res,)
 
-        assert len(res) == len(out)
-        for i in range(len(res)):
-            out[i][indices] = res[i]
+#         assert len(res) == len(out)
+#         for i in range(len(res)):
+#             out[i][indices] = res[i]
 
 
 def test_v2v():
@@ -212,20 +178,20 @@ def test_v2v():
 
     v2v_conn = make_v2v_conn(shape)
 
-    print(v2v_explicit(v2v_conn, as_field(inp1d, LocationType.Vertex))(1))
-    print(v2v(v2v_conn, as_field(inp1d, LocationType.Vertex))(1))
+    print(v2v_explicit(1)(v2v_conn, as_field(inp1d, LocationType.Vertex)))
+    # print(v2v(v2v_conn, as_field(inp1d, LocationType.Vertex))(1))
 
-    apply_stencil(
-        identity,
-        [inner_domain],
-        [v2v_conn, as_field(inp1d, LocationType.Vertex)],
-        [out1d],
-    )
     # apply_stencil(
-    # v2v, [inner_domain], [v2v_conn, as_field(inp1d, LocationType.Vertex)], [out1d]
+    #     identity,
+    #     [inner_domain],
+    #     [v2v_conn, as_field(inp1d, LocationType.Vertex)],
+    #     [out1d],
     # )
-    out2d = as_2d(out1d, shape)
-    assert np.allclose(out2d, ref)
+    # # apply_stencil(
+    # # v2v, [inner_domain], [v2v_conn, as_field(inp1d, LocationType.Vertex)], [out1d]
+    # # )
+    # out2d = as_2d(out1d, shape)
+    # assert np.allclose(out2d, ref)
 
 
 test_v2v()
