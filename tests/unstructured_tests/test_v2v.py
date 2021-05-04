@@ -58,16 +58,6 @@ def v2v_plus_v(vv_conn, v_field):
     return v_field + acc[0] + acc[1] + acc[2] + acc[3]
 
 
-def neigh_sum(conn, field):
-    acc = conn(field)
-    return acc[0] + acc[1]  # + acc[2] + acc[3]
-
-
-# def v2v(vv_conn, v_field):
-#     acc = vv_conn(v2v(vv_conn, v_field))
-#     return acc[0] + acc[1]  # + acc[2] + acc[3]
-
-
 def identity(vv_conn, v_field):
     return v2v(vv_conn, v_field)
 
@@ -76,34 +66,24 @@ def v2v2v(vv_conn, v_field):
     return v2v(vv_conn, v2v(vv_conn, v_field))
 
 
-def other_fun(e2v_conn, v_field, e_field):
-    # return sum(neigh for neigh in e2v_conn(v_field))
-
-    return e_field + e2v_conn(v_field)[0] + e2v_conn(v_field)[1]
-
-
-def v2e2v(v2e, e2v, v_field, e_field):
-    return neigh_sum(v2e, other_fun(e2v, v_field, e_field))
-
-
-# e2v == vs_from_e
-
-
 def v2v2v_with_v2v(vv_conn, v_field):
     x = v2v(vv_conn, v_field)
     return v2v(vv_conn, x) + vv_conn(v_field)[0] + vv_conn(v_field)[1]
 
 
-def test_v2v_plus_v():
+def test_simple_cases():
     shape = (5, 7)
     v2v_conn = make_v2v_conn(shape)
     inp = np.ones(shape)
     inp1d = as_1d(inp)
 
-    assert v2v_plus_v(v2v_conn, array_to_field(inp1d, LocationType.Vertex))(3) == 5.0
+    inp_field = array_to_field(inp1d, LocationType.Vertex)
+
+    assert v2v_plus_v(v2v_conn, inp_field)(3) == 5.0
+    assert identity(v2v_conn, inp_field)(3) == 4.0
 
 
-test_v2v_plus_v()
+test_simple_cases()
 
 
 def test_v2v():
