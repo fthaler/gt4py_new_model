@@ -28,6 +28,43 @@ class Field(ABC):
 
         return _field()
 
+    def __sub__(outer_self, other):
+        class _field(Field):
+            def __call__(self, index):
+                return outer_self(index) - other(index)
+
+        return _field()
+
+    def __mul__(outer_self, other):
+        class _field(Field):
+            def __call__(self, index):
+                return outer_self(index) * other(index)
+
+        return _field()
+
+    def __rmul__(outer_self, other):
+        class _field(Field):
+            def __call__(self, index):
+                return outer_self(index) * other
+
+        return _field()
+
+    def __gt__(outer_self, other):
+        class _field(Field):
+            def __call__(self, index):
+                other_val = other(index) if isinstance(other, Field) else other
+                return outer_self(index) > other_val
+
+        return _field()
+
+
+def if_(cond, true_branch, false_branch):
+    class _field(Field):
+        def __call__(self, index):
+            return true_branch(index) if cond(index) else false_branch(index)
+
+    return _field()
+
 
 def field_dec(_loc):
     def inner_field_dec(fun):
