@@ -22,6 +22,8 @@ class Field(ABC):
         return None
 
     def __add__(outer_self, other):
+        # assert outer_self.loc == other.loc
+
         class _field(Field):
             def __call__(self, index):
                 return outer_self(index) + other(index)
@@ -38,7 +40,18 @@ class Field(ABC):
     def __mul__(outer_self, other):
         class _field(Field):
             def __call__(self, index):
-                return outer_self(index) * other(index)
+                return (
+                    outer_self(index) * other(index)
+                    if outer_self(index) and other(index)
+                    else None
+                )
+
+        return _field()
+
+    def __truediv__(outer_self, other):
+        class _field(Field):
+            def __call__(self, index):
+                return outer_self(index) / other(index)
 
         return _field()
 
