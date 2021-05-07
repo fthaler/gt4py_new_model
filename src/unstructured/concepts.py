@@ -36,20 +36,23 @@ class _FieldArithmetic:
     def _field_op(op):
         def fun(first, second):
             class _field(Field):
-                def __call__(self, index):
+                def __getitem__(self, index):
                     if isinstance(second, Field):
-                        second_value = second(index)
+                        second_value = second[index]
                     elif isinstance(second, Number):
                         second_value = second
                     else:
                         raise ValueError()
 
-                    if first(index) is not None:
+                    if first[index] is not None:
                         assert second_value is not None
-                        return op(first(index), second_value)
+                        return op(first[index], second_value)
                     else:
                         return None
 
+            if hasattr(first, "__len__") and hasattr(second, "__len__"):
+                assert len(first) == len(second)
+                setattr(_field, "__len__", first.__len__)
             return _field()
 
         return fun
@@ -73,12 +76,14 @@ class Field(_FieldArithmetic):
     pass
 
 
-def field_dec(_loc):
+def field_dec(_loc, *, index_fun=lambda index: index):
     def inner_field_dec(fun):
         class _field(Field):
-            loc = _loc
+            def __init__(self):
+                self.loc = _loc
+                self.index_fun = index_fun
 
-            def __call__(self, index):
+            def __getitem__(self, index):
                 return fun(index)
 
         return _field()
@@ -94,89 +99,24 @@ def constant_field(c, loc):
     return _field
 
 
-class Accessor:
-    def __mul__(outer_self, other):
-        class acc(Accessor):
-            def __getitem__(self, neighindex):
-                return outer_self[neighindex] * other[neighindex]
-
-            def __len__(self):
-                return len(outer_self)
-
-        return acc()
-
-    def __or__(outer_self, other):
-        class acc(Accessor):
-            def __getitem__(self, neighindex):
-                return outer_self[neighindex] or other[neighindex]
-
-            def __len__(self):
-                return len(outer_self)
-
-        return acc()
-
-    def __eq__(outer_self, other):
-        class acc(Accessor):
-            def __getitem__(self, neighindex):
-                return outer_self[neighindex] == other[neighindex]
-
-            def __len__(self):
-                return len(outer_self)
-
-        return acc()
-
-    def __ne__(outer_self, other):
-        class acc(Accessor):
-            def __getitem__(self, neighindex):
-                return outer_self[neighindex] != other[neighindex]
-
-            def __len__(self):
-                return len(outer_self)
-
-        return acc()
-
-
 def if_(cond, true_branch, false_branch):
-    if isinstance(cond, Field):
-        assert isinstance(true_branch, Field) and isinstance(false_branch, Field)
+    assert isinstance(cond, Field)
+    assert isinstance(true_branch, Field)
+    assert isinstance(false_branch, Field)
 
-        class _field(Field):
-            def __call__(self, index):
-                return true_branch(index) if cond(index) else false_branch(index)
+    @field_dec(true_branch.loc)
+    def _field(index):
+        return true_branch(index) if cond(index) else false_branch(index)
 
-        return _field()
-    elif isinstance(cond, Accessor):
-
-        class acc(Accessor):
-            def __getitem__(self, neighindex):
-                # we can promote a field to an accessor of the field
-                cur_true_branch = (
-                    true_branch[neighindex]
-                    if isinstance(true_branch, Accessor)
-                    else true_branch
-                )
-                cur_false_branch = (
-                    false_branch[neighindex]
-                    if isinstance(false_branch, Accessor)
-                    else false_branch
-                )
-
-                return if_(cond[neighindex], cur_true_branch, cur_false_branch)
-
-            def __len__(self):
-                return len(cond)
-
-        return acc()
-    else:
-        assert False
+    return _field
 
 
 def apply_stencil(stencil, domain, connectivities_and_in_fields, out):
     for indices in itertools.product(*domain):
         fields_and_sparse_fields = stencil(*connectivities_and_in_fields)
-        res = fields_and_sparse_fields(
-            *indices
-        )  # TODO loop over neighbors in case of sparse_field
+        res = fields_and_sparse_fields[
+            indices
+        ]  # TODO loop over neighbors in case of sparse_field
         if not isinstance(res, tuple):
             res = (res,)
 
