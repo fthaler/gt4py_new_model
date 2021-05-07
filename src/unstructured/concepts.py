@@ -13,51 +13,64 @@
 
 import enum
 import itertools
+import operator
+from numbers import Number
 
 
-class Field:
+class _FieldArithmetic:
+    SUPPORTED_OPS = [
+        "__mul__",
+        "__add__",
+        "__sub__",
+        "__truediv__",
+        "__gt__",
+        "__lt__",
+        "__or__",
+        "__and__",
+        "__eq__",
+        "__ne__",
+    ]
+    SUPPORTED_REVERSE_OPS = ["__rmul__"]
+
     @staticmethod
-    def _field_arithmetic(op, first, second):
-        class _field(Field):
-            def __call__(self, index):
-                return (
-                    op(first(index), second(index))
-                    if first(index) and second(index)
-                    else None
-                )
+    def _field_op(op):
+        def fun(first, second):
+            class _field(Field):
+                def __call__(self, index):
+                    if isinstance(second, Field):
+                        second_value = second(index)
+                    elif isinstance(second, Number):
+                        second_value = second
+                    else:
+                        raise ValueError()
 
-        return _field()
+                    if first(index) is not None:
+                        assert second_value is not None
+                        return op(first(index), second_value)
+                    else:
+                        return None
 
-    def __add__(self, other):
-        return self._field_arithmetic(lambda a, b: a + b, self, other)
+            return _field()
 
-    def __sub__(self, other):
-        return self._field_arithmetic(lambda a, b: a - b, self, other)
+        return fun
 
-    def __mul__(self, other):
-        return self._field_arithmetic(lambda a, b: a * b, self, other)
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
 
-    def __truediv__(self, other):
-        return self._field_arithmetic(lambda a, b: a / b, self, other)
+        attr_to_op = {op: op for op in cls.SUPPORTED_OPS}
+        attr_to_op |= {op: op.replace("__r", "__") for op in cls.SUPPORTED_REVERSE_OPS}
+        for attr, op in attr_to_op.items():
+            setattr(
+                cls,
+                attr,
+                lambda self, other, op=op: self._field_op(getattr(operator, op))(
+                    self, other
+                ),
+            )
 
-    def __rmul__(outer_self, other):
-        class _field(Field):
-            def __call__(self, index):
-                return outer_self(index) * other if outer_self(index) else None
 
-        return _field()
-
-    def __gt__(self, other):
-        return self._field_arithmetic(lambda a, b: a > b, self, other)
-
-    def __or__(self, other):
-        return self._field_arithmetic(lambda a, b: a or b, self, other)
-
-    def __eq__(self, other):
-        return self._field_arithmetic(lambda a, b: a == b, self, other)
-
-    def __ne__(self, other):
-        return self._field_arithmetic(lambda a, b: a != b, self, other)
+class Field(_FieldArithmetic):
+    pass
 
 
 def field_dec(_loc):
