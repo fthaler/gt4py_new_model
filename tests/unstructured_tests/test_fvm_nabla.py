@@ -13,10 +13,12 @@
 
 from typing import Tuple
 from unstructured.concepts import (
+    Accessor,
     Field,
     LocationType,
     apply_stencil,
     field_dec,
+    if_,
 )
 from atlas4py import (
     StructuredGrid,
@@ -35,18 +37,6 @@ import math
 from unstructured.helpers import array_to_field
 
 
-class Accessor:
-    def __mul__(outer_self, other):
-        class acc(Accessor):
-            def __getitem__(self, neighindex):
-                return outer_self[neighindex] * other[neighindex]
-
-            def __len__(self):
-                return len(outer_self)
-
-        return acc()
-
-
 def make_connectivity_from_atlas(neightbl):
     def conn(field):
         class acc(Accessor):
@@ -57,27 +47,91 @@ def make_connectivity_from_atlas(neightbl):
                     # assert isinstance(neighborhood, Edge2Vertex)
                     return 2
 
+            def index_fun(self, index, neighindex):
+                if isinstance(neightbl, IrregularConnectivity):
+                    if neighindex < neightbl.cols(index):
+                        return neightbl[index, neighindex]
+                    else:
+                        return None
+                else:
+                    if neighindex < 2:
+                        return neightbl[index, neighindex]
+                    else:
+                        assert False
+
             def __getitem__(self, neighindex):
-                @field_dec(LocationType.Vertex)  # TODO!
-                def _field(index):
-                    if isinstance(neightbl, IrregularConnectivity):
-                        # print(f"neighindex {neighindex}, cols {neightbl.cols(index)}")
-                        if neighindex < neightbl.cols(index):
-                            return field(neightbl[index, neighindex])
+                # TODO proper connectivity multiplication:
+                # if accessor is passed to connectivity we need to do connectivity multiplication
+                # i.e. create higher ranked accessor
+                # the following only works for one level of nesting:
+                if isinstance(field, Accessor):
+                    # TODO proper implementation
+
+                    assert False
+
+                else:
+
+                    @field_dec(LocationType.Vertex)  # TODO!
+                    def _field(index):
+                        idx = self.index_fun(index, neighindex)
+                        if idx is not None:
+                            return field(idx)
                         else:
                             return None
-                    else:
-                        # assert isinstance(neighborhood, Edge2Vertex)
-                        if neighindex < 2:
-                            return field(neightbl[index, neighindex])
-                        else:
-                            assert False
 
-                return _field
+                    return _field
 
         return acc()
 
     return conn
+
+
+# def make_broadcast_connectivity_from_atlas(neightbl):
+#     def conn(field):
+#         class acc(Accessor):
+#             def __len__(self):
+#                 if isinstance(neightbl, IrregularConnectivity):
+#                     return 7  # TODO!
+#                 else:
+#                     # assert isinstance(neighborhood, Edge2Vertex)
+#                     return 2
+
+#             def __getitem__(self, neighindex):
+#                 @field_dec(LocationType.Vertex)  # TODO!
+#                 def _field(index):
+#                     if isinstance(neightbl, IrregularConnectivity):
+#                         # print(f"neighindex {neighindex}, cols {neightbl.cols(index)}")
+#                         if neighindex < neightbl.cols(index):
+#                             return field(index)
+#                         else:
+#                             return None
+#                     else:
+#                         # assert isinstance(neighborhood, Edge2Vertex)
+#                         if neighindex < 2:
+#                             return field(index)
+#                         else:
+#                             assert False
+
+#                 return _field
+
+#         return acc()
+
+#     return conn
+
+
+def broadcast(field, loc):
+    class acc(Accessor):
+        def __len__(self):
+            return None  # for infinite neighbors it's always the same value...
+
+        def __getitem__(self, neighindex):
+            @field_dec(loc)
+            def _field(index):
+                return field(index)
+
+            return _field
+
+    return acc()
 
 
 def atlas2d_to_field(atlas_field, location_type):
@@ -105,15 +159,15 @@ def make_mesh():
     return mesh, fs_edges, fs_nodes, edges_per_node
 
 
-# @stencil
-# def sign_stencil(node_id, pole_edge, nodes_indices: Edge2Vertex):
-#     if pole_edge or node_id == nodes_indices[0]:
-#         return 1.0
-#     else:
-#         return -1.0
+def constant_field(c):
+    @field_dec(LocationType.Vertex)  # TODO
+    def _field(index):
+        return c
+
+    return _field
 
 
-def sparsefield_to_accessor_field(array):
+def sparsefield_to_accessor_of_fields(array):
     class acc:
         def __getitem__(self, neigh_index):
             @field_dec(LocationType.Vertex)
@@ -144,7 +198,7 @@ def make_sign_field(mesh, nodes_size, edges_per_node):
                 node2edge_sign[jnode, jedge] = -1.0
                 if is_pole_edge(iedge):
                     node2edge_sign[jnode, jedge] = 1.0
-    return sparsefield_to_accessor_field(node2edge_sign)
+    return sparsefield_to_accessor_of_fields(node2edge_sign)
 
 
 def assert_close(expected, actual):
@@ -153,43 +207,188 @@ def assert_close(expected, actual):
     )
 
 
-# def test_sign_field():
+# for each edge neighbor get the same node index, i.e.
+# node_index_stencil(node_index)[N](M) == M for all N
+# TODO how to write a sparse field in apply_stencil
+def test_node_index_stencil():
+    def node_index_stencil(node_index):
+        return broadcast(node_index, LocationType.Edge)
+
+    mesh, fs_edges, fs_nodes, edges_per_node = make_mesh()
+
+    index_field = array_to_field(np.array(range(fs_nodes.size)), LocationType.Vertex)
+
+    nodes_domain = list(range(fs_nodes.size))
+
+    out = np.zeros((fs_nodes.size,))
+
+    print(node_index_stencil(index_field)[1](20))
+
+    # apply_stencil(
+    #     node_index_stencil,
+    #     [nodes_domain],
+    #     [
+    #         index_field,
+    #     ],
+    #     [out],
+    # )
+    # for i in range(fs_nodes.size):
+    #     assert out[i] == i
+
+
+test_node_index_stencil()
+
+
+# def sign_stencil(node_id):
 #     @stencil
-#     def validate_sign(
-#         node_index,
-#         pole_edges: Vertex2Edge,
-#         nodes_indices: Tuple[Vertex2Edge, Edge2Vertex],
-#         external_sign: Vertex2Edge,
-#     ):
-#         sign_acc = lift(sign_stencil)(node_index, pole_edges, nodes_indices)
-#         for i in range(7):
-#             if sign_acc[i] and external_sign[i]:
-#                 assert sign_acc[i] == external_sign[i]
+#     def sten(pole_edge: CurrentEdge, nodes_indices: Edge2Vertex):
+#         if pole_edge or node_id == nodes_indices[0]:
+#             return 1.0
+#         else:
+#             return -1.0
 
-#     mesh, fs_edges, fs_nodes, edges_per_node = make_mesh()
-#     sign_acc = make_sign_field(mesh, fs_nodes.size, edges_per_node)  # acc of rank 1
+#     return sten
 
-#     edge_flags = np.array(mesh.edges.flags())
-#     pole_edges = as_field(
-#         np.array([Topology.check(flag, Topology.POLE) for flag in edge_flags]),
-#         LocationType.Edge,
+
+# @stencil
+# def validate_sign(
+#     node_index: CurrentVertex,
+#     pole_edges: Vertex2Edge,
+#     nodes_indices: Tuple[Vertex2Edge, Edge2Vertex],
+#     external_sign: Vertex2Edge,
+# ):
+#     sign_acc = lift(sign_stencil(node_index))(pole_edges, nodes_indices)
+
+#     for i in range(7):
+#         if sign_acc[i] and external_sign[i]:
+#             assert sign_acc[i] == external_sign[i]
+
+
+# @stencil
+# def sign_stencil(
+#     node_id: EdgeToCallingVertex, pole_edge: CurrentEdge, nodes_indices: Edge2Vertex
+# ):
+#     if pole_edge or node_id == nodes_indices[0]:
+#         return 1.0
+#     else:
+#         return -1.0
+
+
+# @stencil
+# def validate_sign(
+#     node_index: Tuple[CurrentVertex],
+#     pole_edges: Vertex2Edge,
+#     nodes_indices: Tuple[Vertex2Edge, Edge2Vertex],
+#     external_sign: Vertex2Edge,
+# ):
+#     sign_acc = lift(sign_stencil)(node_index, pole_edges, nodes_indices)
+
+#     for i in range(7):
+#         if sign_acc[i] and external_sign[i]:
+#             assert sign_acc[i] == external_sign[i]
+
+
+#     nodes_indices = e2v(node_index)
+#     # nodes_indices[0](edge_index)
+
+#     return if_(
+#         or_(pole_edge, node_index == nodes_indices[0]),
+#         constant_field(1.0),
+#         constant_field(-1.0),
 #     )
-#     index_field = as_field(np.array(range(fs_nodes.size)), LocationType.Vertex)
 
-#     nodes_domain = list(range(fs_nodes.size))
 
-#     out = np.zeros((fs_nodes.size,))
+def bool_reduce(acc):
+    @field_dec(LocationType.Vertex)  # TODO
+    def _field(field_index):
+        res = True
+        for i in range(len(acc)):
+            if acc[i](field_index):
+                res = res and acc[i](field_index)
+        return res
 
-#     apply_stencil(
-#         validate_sign,
-#         [nodes_domain],
-#         [
-#             make_connectivity_from_atlas(mesh.edges.node_connectivity, e2v),
-#             make_connectivity_from_atlas(mesh.nodes.edge_connectivity, v2e),
-#         ],
-#         [out],
-#         [index_field, pole_edges, index_field, sign_acc],
-#     )
+    return _field
+
+
+def test_sign_field():
+    def validate_sign(
+        e2v,
+        v2e,
+        node_indices,
+        pole_edges,
+        external_sign,
+    ):  # on vertices
+
+        node_indices_of_neighbor_edge = v2e(e2v(node_indices))
+        pole_flag_of_neighbor_edges = v2e(pole_edges)
+
+        # TODO @acc
+        def sign_acc(neigh_index):
+            return if_(
+                pole_flag_of_neighbor_edges[neigh_index]
+                or (
+                    node_indices,
+                    LocationType.Edge == node_indices_of_neighbor_edge[0][neigh_index],
+                ),
+                constant_field(1.0),
+                constant_field(-1.0),
+            )
+
+        sign_acc = if_(
+            pole_flag_of_neighbor_edges
+            or (
+                broadcast(node_indices, LocationType.Edge)
+                == node_indices_of_neighbor_edge[0]
+            ),
+            broadcast(constant_field(1.0), LocationType.Edge),
+            broadcast(constant_field(-1.0), LocationType.Edge),
+        )
+
+        @field_dec(LocationType.Vertex)
+        def assert_fun(index):
+            print(f"{sign_acc[2](index)} / {external_sign[2](index)} @ {index}")
+            print(pole_flag_of_neighbor_edges[2])
+            print(node_indices_of_neighbor_edge[2])
+            print(node_indices_of_neighbor_edge[2][0])
+            print(node_indices)
+            print(
+                f"pole: {pole_flag_of_neighbor_edges[2](index)}, node_index: {node_indices(index)}, neigh_index_0: {node_indices_of_neighbor_edge[2][0](index)}"
+            )
+            assert sign_acc[2](index) == external_sign[2](index)
+
+        return assert_fun
+
+        # return bool_reduce(sign_acc == external_sign)
+
+    mesh, fs_edges, fs_nodes, edges_per_node = make_mesh()
+    sign_acc = make_sign_field(mesh, fs_nodes.size, edges_per_node)  # acc of rank 1
+
+    edge_flags = np.array(mesh.edges.flags())
+    pole_edges = array_to_field(
+        np.array([Topology.check(flag, Topology.POLE) for flag in edge_flags]),
+        LocationType.Edge,
+    )
+    index_field = array_to_field(np.array(range(fs_nodes.size)), LocationType.Vertex)
+
+    nodes_domain = list(range(fs_nodes.size))
+
+    out = np.zeros((fs_nodes.size,))
+
+    apply_stencil(
+        validate_sign,
+        [nodes_domain],
+        [
+            make_connectivity_from_atlas(mesh.edges.node_connectivity),
+            make_connectivity_from_atlas(mesh.nodes.edge_connectivity),
+            index_field,
+            pole_edges,
+            sign_acc,
+        ],
+        [out],
+    )
+
+
+# test_sign_field()
 
 
 def make_S(mesh, fs_edges):
@@ -296,12 +495,6 @@ def make_input_field(mesh, fs_nodes, edges_per_node):
     return array_to_field(rzs[:, klevel], LocationType.Vertex)
 
 
-def compute_zavgS(e2v, pp, S_M):
-    pp_neighs = e2v(pp)
-    zavg = 0.5 * (pp_neighs[0] + pp_neighs[1])
-    return S_M * zavg
-
-
 def sum_reduce(acc):
     @field_dec(LocationType.Vertex)  # TODO
     def _field(field_index):
@@ -312,6 +505,18 @@ def sum_reduce(acc):
         return res
 
     return _field
+
+
+# def reduce_edges_to_vertices(v2e, edge_field):
+#     edge_acc = v2e(edge_field)
+#     # return edge_acc[0] + edge_acc[1]
+#     return sum_reduce(edge_acc)
+
+
+def compute_zavgS(e2v, pp, S_M):
+    pp_neighs = e2v(pp)
+    zavg = 0.5 * (pp_neighs[0] + pp_neighs[1])
+    return S_M * zavg
 
 
 def compute_pnabla(e2v, v2e, pp, S_M, sign, vol):
@@ -421,56 +626,70 @@ def test_nabla():
     assert_close(3.3540113705465301e-003, max(pnabla_MYY))
 
 
-# @stencil
-# def nabla_from_sign_stencil(
-#     pp: Tuple[Vertex2Edge, Edge2Vertex],
-#     S_MXX: Vertex2Edge,
-#     S_MYY: Vertex2Edge,
-#     vol,
-#     node_index,
-#     pole_edges: Vertex2Edge,
-#     nodes_indices: Tuple[Vertex2Edge, Edge2Vertex],
-# ):
-#     sign_acc = lift(sign_stencil)(node_index, pole_edges, nodes_indices)
-#     return compute_pnabla(pp, S_MXX, sign_acc, vol), compute_pnabla(
-#         pp, S_MYY, sign_acc, vol
-#     )
+def nabla_from_sign_stencil(
+    e2v, v2e, pp, S_MXX, S_MYY, vol, node_indices, pole_edges, external_sign
+):
+    node_indices_of_neighbor_edge = v2e(e2v(node_indices))
+    pole_flag_of_neighbor_edges = v2e(pole_edges)
+    sign_acc = if_(
+        pole_flag_of_neighbor_edges
+        or (
+            broadcast(node_indices, LocationType.Edge)  # ?
+            == node_indices_of_neighbor_edge[0]
+        ),
+        constant_field(1.0),
+        constant_field(-1.0),
+    )
+
+    # sign_acc = external_sign
+    return make_tuple(
+        compute_pnabla(e2v, v2e, pp, S_MXX, sign_acc, vol),
+        compute_pnabla(e2v, v2e, pp, S_MYY, sign_acc, vol),
+    )
 
 
-# def test_nabla_from_sign_stencil():
-#     mesh, fs_edges, fs_nodes, edges_per_node = make_mesh()
+def test_nabla_from_sign_stencil():
+    mesh, fs_edges, fs_nodes, edges_per_node = make_mesh()
 
-#     pp = make_input_field(mesh, fs_nodes, edges_per_node)
-#     S_MXX, S_MYY = make_S(mesh, fs_edges)
-#     vol = make_vol(mesh)
+    pp = make_input_field(mesh, fs_nodes, edges_per_node)
+    S_MXX, S_MYY = make_S(mesh, fs_edges)
+    vol = make_vol(mesh)
 
-#     edge_flags = np.array(mesh.edges.flags())
-#     pole_edges = as_field(
-#         np.array([Topology.check(flag, Topology.POLE) for flag in edge_flags]),
-#         LocationType.Edge,
-#     )
-#     index_field = as_field(np.array(range(fs_nodes.size)), LocationType.Vertex)
+    edge_flags = np.array(mesh.edges.flags())
+    pole_edges = array_to_field(
+        np.array([Topology.check(flag, Topology.POLE) for flag in edge_flags]),
+        LocationType.Edge,
+    )
+    index_field = array_to_field(np.array(range(fs_nodes.size)), LocationType.Vertex)
+    external_sign = make_sign_field(mesh, fs_nodes.size, 7)
 
-#     nodes_domain = list(range(fs_nodes.size))
+    nodes_domain = list(range(fs_nodes.size))
 
-#     pnabla_MXX = np.zeros((fs_nodes.size))
-#     pnabla_MYY = np.zeros((fs_nodes.size))
-#     apply_stencil(
-#         nabla_from_sign_stencil,
-#         [nodes_domain],
-#         [
-#             make_connectivity_from_atlas(mesh.edges.node_connectivity, e2v),
-#             make_connectivity_from_atlas(mesh.nodes.edge_connectivity, v2e),
-#         ],
-#         [pnabla_MXX, pnabla_MYY],
-#         [pp, S_MXX, S_MYY, vol, index_field, pole_edges, index_field],
-#     )
+    pnabla_MXX = np.zeros((fs_nodes.size))
+    pnabla_MYY = np.zeros((fs_nodes.size))
+    apply_stencil(
+        nabla_from_sign_stencil,
+        [nodes_domain],
+        [
+            make_connectivity_from_atlas(mesh.edges.node_connectivity),
+            make_connectivity_from_atlas(mesh.nodes.edge_connectivity),
+            pp,
+            S_MXX,
+            S_MYY,
+            vol,
+            index_field,
+            pole_edges,
+            external_sign,
+        ],
+        [pnabla_MXX, pnabla_MYY],
+    )
 
-#     assert_close(-3.5455427772566003e-003, min(pnabla_MXX))
-#     assert_close(3.5455427772565435e-003, max(pnabla_MXX))
-#     assert_close(-3.3540113705465301e-003, min(pnabla_MYY))
-#     assert_close(3.3540113705465301e-003, max(pnabla_MYY))
+    assert_close(-3.5455427772566003e-003, min(pnabla_MXX))
+    assert_close(3.5455427772565435e-003, max(pnabla_MXX))
+    assert_close(-3.3540113705465301e-003, min(pnabla_MYY))
+    assert_close(3.3540113705465301e-003, max(pnabla_MYY))
 
 
 if __name__ == "__main__":
     test_nabla()
+    # test_nabla_from_sign_stencil()
