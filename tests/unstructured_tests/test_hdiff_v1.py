@@ -1,4 +1,10 @@
-from unstructured.concepts import LocationType, apply_stencil, field_dec, if_
+from unstructured.concepts import (
+    LocationType,
+    apply_stencil,
+    constant_field,
+    field_dec,
+    if_,
+)
 from unstructured.helpers import array_to_field, as_1d, as_2d
 import math
 import numpy as np
@@ -55,7 +61,12 @@ def hdiff_flux_x(conn, inp):
     flux = lap[conn.center] - lap[conn.right]
 
     neighs = conn(inp)
-    return if_(flux * (neighs[conn.right] - neighs[conn.center]) > 0, lambda x: 0, flux)
+    return if_(
+        flux * (neighs[conn.right] - neighs[conn.center])
+        > constant_field(0, LocationType.Vertex),
+        constant_field(0, LocationType.Vertex),
+        flux,
+    )
 
 
 def hdiff_flux_y(conn, inp):
@@ -64,7 +75,10 @@ def hdiff_flux_y(conn, inp):
 
     neighs = conn(inp)
     return if_(
-        flux * (neighs[conn.bottom] - neighs[conn.center]) > 0, lambda x: 0, flux
+        flux * (neighs[conn.bottom] - neighs[conn.center])
+        > constant_field(0, LocationType.Vertex),
+        constant_field(0, LocationType.Vertex),
+        flux,
     )
 
 

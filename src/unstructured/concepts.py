@@ -11,85 +11,53 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from abc import ABC, abstractmethod
 import enum
 import itertools
 
 
-class Field:  # (ABC):
-    # @abstractmethod
-    def __call__(self, index):
-        return None
-
-    def __add__(outer_self, other):
-        # assert outer_self.loc == other.loc
-
-        class _field(Field):
-            def __call__(self, index):
-                return outer_self(index) + other(index)
-
-        return _field()
-
-    def __sub__(outer_self, other):
-        class _field(Field):
-            def __call__(self, index):
-                return outer_self(index) - other(index)
-
-        return _field()
-
-    def __mul__(outer_self, other):
+class Field:
+    @staticmethod
+    def _field_arithmetic(op, first, second):
         class _field(Field):
             def __call__(self, index):
                 return (
-                    outer_self(index) * other(index)
-                    if outer_self(index) and other(index)
+                    op(first(index), second(index))
+                    if first(index) and second(index)
                     else None
                 )
 
         return _field()
 
-    def __truediv__(outer_self, other):
-        class _field(Field):
-            def __call__(self, index):
-                return outer_self(index) / other(index)
+    def __add__(self, other):
+        return self._field_arithmetic(lambda a, b: a + b, self, other)
 
-        return _field()
+    def __sub__(self, other):
+        return self._field_arithmetic(lambda a, b: a - b, self, other)
+
+    def __mul__(self, other):
+        return self._field_arithmetic(lambda a, b: a * b, self, other)
+
+    def __truediv__(self, other):
+        return self._field_arithmetic(lambda a, b: a / b, self, other)
 
     def __rmul__(outer_self, other):
         class _field(Field):
             def __call__(self, index):
-                return outer_self(index) * other
+                return outer_self(index) * other if outer_self(index) else None
 
         return _field()
 
-    def __gt__(outer_self, other):
-        class _field(Field):
-            def __call__(self, index):
-                other_val = other(index) if isinstance(other, Field) else other
-                return outer_self(index) > other_val
+    def __gt__(self, other):
+        return self._field_arithmetic(lambda a, b: a > b, self, other)
 
-        return _field()
+    def __or__(self, other):
+        return self._field_arithmetic(lambda a, b: a or b, self, other)
 
-    def __or__(outer_self, other):
-        class _field(Field):
-            def __call__(self, index):
-                return outer_self(index) or other(index)
+    def __eq__(self, other):
+        return self._field_arithmetic(lambda a, b: a == b, self, other)
 
-        return _field()
-
-    def __eq__(outer_self, other):
-        class _field(Field):
-            def __call__(self, index):
-                return outer_self(index) == other(index)
-
-        return _field()
-
-    def __ne__(outer_self, other):
-        class _field(Field):
-            def __call__(self, index):
-                return outer_self(index) != other(index)
-
-        return _field()
+    def __ne__(self, other):
+        return self._field_arithmetic(lambda a, b: a != b, self, other)
 
 
 def field_dec(_loc):
@@ -103,6 +71,14 @@ def field_dec(_loc):
         return _field()
 
     return inner_field_dec
+
+
+def constant_field(c, loc):
+    @field_dec(loc)
+    def _field(index):
+        return c
+
+    return _field
 
 
 class Accessor:

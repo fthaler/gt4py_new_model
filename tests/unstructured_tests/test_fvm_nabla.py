@@ -17,6 +17,7 @@ from unstructured.concepts import (
     Field,
     LocationType,
     apply_stencil,
+    constant_field,
     field_dec,
     if_,
 )
@@ -157,14 +158,6 @@ def make_mesh():
     build_median_dual_mesh(mesh)
 
     return mesh, fs_edges, fs_nodes, edges_per_node
-
-
-def constant_field(c):
-    @field_dec(LocationType.Vertex)  # TODO
-    def _field(index):
-        return c
-
-    return _field
 
 
 def sparsefield_to_accessor_of_fields(array):
@@ -692,4 +685,5 @@ def test_nabla_from_sign_stencil():
 
 if __name__ == "__main__":
     test_nabla()
+    # test_compute_zavgS()
     # test_nabla_from_sign_stencil()
