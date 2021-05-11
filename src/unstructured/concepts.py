@@ -76,19 +76,45 @@ class Field(_FieldArithmetic):
     pass
 
 
-def field_dec(_loc, *, index_fun=lambda index: index):
+def field_dec(axises):
+    axises = _tupelize(axises)
+
     def inner_field_dec(fun):
         class _field(Field):
             def __init__(self):
-                self.loc = _loc
-                self.index_fun = index_fun
+                self.axises = axises
 
             def __getitem__(self, index):
+                index = _tupelize(index)
                 return fun(index)
 
         return _field()
 
     return inner_field_dec
+
+
+def axis(*, length=None):
+    def _impl(cls):
+        class _axis:
+            def __init__(self, index):
+                self.index = index
+
+            def __index__(self):
+                if length is not None:
+                    if self.index >= length:
+                        raise IndexError()
+
+                return self.index
+
+            def __str__(self):
+                return cls.__name__
+
+        if length is not None:
+            setattr(_axis, "__len__", lambda self: length)
+
+        return _axis
+
+    return _impl
 
 
 def constant_field(c, loc):
@@ -104,11 +130,45 @@ def if_(cond, true_branch, false_branch):
     assert isinstance(true_branch, Field)
     assert isinstance(false_branch, Field)
 
-    @field_dec(true_branch.loc)
+    @field_dec(true_branch.axises)
     def _field(index):
         return true_branch(index) if cond(index) else false_branch(index)
 
     return _field
+
+
+def _tupelize(tup):
+    if isinstance(tup, tuple):
+        return tup
+    else:
+        return (tup,)
+
+
+def reduce(op, init):
+    def _red_dim(dim):
+        if not hasattr(dim(0), "__len__"):
+            raise TypeError("Dimension is not reducible")
+
+        def _reduce(field):
+            class _ReducedField:
+                axises = tuple(axis for axis in field.axises if not axis is dim)
+
+                def __getitem__(self, indices):
+                    indices = _tupelize(indices)
+                    res = init
+                    for i in range(len(dim(0))):
+                        res = op(res, field[(dim(i),) + indices])
+                    return res
+
+            return _ReducedField()
+
+        return _reduce
+
+    return _red_dim
+
+
+def sum_reduce(dim):
+    return reduce(operator.add, 0)(dim)
 
 
 def apply_stencil(stencil, domain, connectivities_and_in_fields, out):
@@ -125,8 +185,37 @@ def apply_stencil(stencil, domain, connectivities_and_in_fields, out):
             out[i][indices] = res[i]
 
 
-@enum.unique
-class LocationType(enum.IntEnum):
-    Vertex = 0
-    Edge = 1
-    Cell = 2
+def field_slice(*index):
+    # TODO support multi-slice
+    assert len(index) == 1
+
+    def _fun(field):
+        for ind in index:
+            # TODO exactly one match
+            print(index)
+            print(field.axises)
+            assert any(isinstance(ind, axis) for axis in field.axises)
+
+        class _SlicedField:
+            axises = tuple(axis for axis in field.axises if not isinstance(index, axis))
+
+            def __getitem__(self, indices):
+                indices = _tupelize(indices)
+                # if not isinstance(indices, tuple):
+                #     indices = (indices,)
+
+                # TODO assert all indices have a matching axis (and there are no duplicated indices)
+
+                # print((index,) + indices)
+                return field[index + indices]
+
+        return _SlicedField()
+
+    return _fun
+
+
+# @enum.unique
+# class LocationType(enum.IntEnum):
+#     Vertex = 0
+#     Edge = 1
+#     Cell = 2

@@ -13,10 +13,9 @@
 
 from typing import Tuple
 from unstructured.concepts import (
-    # Accessor,
     Field,
-    LocationType,
     apply_stencil,
+    axis,
     constant_field,
     field_dec,
     if_,
@@ -35,23 +34,58 @@ from atlas4py import (
 import numpy as np
 import math
 
-from unstructured.helpers import array_to_field
+from unstructured.helpers import np_as_field
 
 
-def make_connectivity_from_atlas(neightbl):
+@axis(length=None)
+class Vertex:
+    pass
+
+
+@axis(length=None)
+class Edge:
+    pass
+
+
+@axis(length=7)
+class V2E:
+    pass
+
+
+@axis(length=2)
+class E2V:
+    pass
+
+
+def get_index_of_type(loc):
+    def fun(indices):
+        for ind in indices:
+            if isinstance(ind, loc):
+                return ind.__index__()
+
+    return fun
+
+
+tup = (E2V(1), V2E(3))
+print(get_index_of_type(E2V)(tup))
+print(get_index_of_type(V2E)(tup))
+exit(1)
+
+
+def make_connectivity_from_atlas(neightbl, primary_loc, neigh_loc):
     def conn(field):
         class sparse_field(Field):
-            def __len__(self):
-                if isinstance(neightbl, IrregularConnectivity):
-                    return 7  # TODO!
-                else:
-                    # assert isinstance(neighborhood, Edge2Vertex)
-                    return 2
+            # def __len__(self):
+            #     if isinstance(neightbl, IrregularConnectivity):
+            #         return 7  # TODO!
+            #     else:
+            #         # assert isinstance(neighborhood, Edge2Vertex)
+            #         return 2
 
-            def __getitem__(self, neighindex):
-                def index_fun(index):
-                    if isinstance(index, tuple):
-                        index = index[0]
+            def __getitem__(self, indices):
+                if isinstance(indices, tuple):
+                    # TODO assert that they have the right dimension types
+                    primary_index = get_index_of_type(primary_loc)(indices)
                     if isinstance(neightbl, IrregularConnectivity):
                         if neighindex < neightbl.cols(index):
                             return neightbl[index, neighindex]
@@ -63,121 +97,36 @@ def make_connectivity_from_atlas(neightbl):
                         else:
                             assert False
 
-                # TODO proper connectivity multiplication:
-                # if accessor is passed to connectivity we need to do connectivity multiplication
-                # i.e. create higher ranked accessor
-                # the following only works for one level of nesting:
-                # if isinstance(field, Accessor):
-
-                # class inner_acc(Accessor):
-                #     root_field = field.root_field
-
-                #     def __len__(self):
-                #         if isinstance(neightbl, IrregularConnectivity):
-                #             return 7  # TODO!
+                # def index_fun(index):
+                #     if isinstance(index, tuple):
+                #         index = index[0]
+                #     if isinstance(neightbl, IrregularConnectivity):
+                #         if neighindex < neightbl.cols(index):
+                #             return neightbl[index, neighindex]
                 #         else:
-                #             # assert isinstance(neighborhood, Edge2Vertex)
-                #             return 2
+                #             return None
+                #     else:
+                #         if neighindex < 2:
+                #             return neightbl[index, neighindex]
+                #         else:
+                #             assert False
 
-                #     def __getitem__(self, inner_neighindex):
-                #         def index_fun(index):
-                #             if isinstance(neightbl, IrregularConnectivity):
-                #                 if inner_neighindex < neightbl.cols(index):
-                #                     return neightbl[index, inner_neighindex]
-                #                 else:
-                #                     return None
-                #             else:
-                #                 if inner_neighindex < 2:
-                #                     return neightbl[index, inner_neighindex]
-                #                 else:
-                #                     assert False
-                #             # TODO proper implementation
+                # @field_dec(
+                #     Vertex  # ,
+                #     # index_fun=lambda index: index_fun(field.index_fun(index)),
+                # )  # TODO!
+                # def _field(index):
+                #     idx = index_fun(index)
+                #     if idx is not None:
+                #         return field[idx]
+                #     else:
+                #         return None
 
-                #         # assert False
-                #         @field_dec(
-                #             LocationType.Vertex,
-                #             index_fun=lambda index: index_fun(
-                #                 self.root_field.index_fun(index)
-                #             ),
-                #         )  # TODO!
-                #         def _field(index):
-                #             idx = index_fun(index)
-                #             if idx is not None:
-                #                 return self.root_field(idx)
-                #             else:
-                #                 return None
-
-                #         return _field
-
-                # return inner_acc()
-                #     assert false
-
-                # else:
-
-                @field_dec(
-                    LocationType.Vertex,
-                    index_fun=lambda index: index_fun(field.index_fun(index)),
-                )  # TODO!
-                def _field(index):
-                    idx = index_fun(index)
-                    if idx is not None:
-                        return field[idx]
-                    else:
-                        return None
-
-                return _field
+                # return _field
 
         return sparse_field()
 
     return conn
-
-
-# def make_broadcast_connectivity_from_atlas(neightbl):
-#     def conn(field):
-#         class acc(Accessor):
-#             def __len__(self):
-#                 if isinstance(neightbl, IrregularConnectivity):
-#                     return 7  # TODO!
-#                 else:
-#                     # assert isinstance(neighborhood, Edge2Vertex)
-#                     return 2
-
-#             def __getitem__(self, neighindex):
-#                 @field_dec(LocationType.Vertex)  # TODO!
-#                 def _field(index):
-#                     if isinstance(neightbl, IrregularConnectivity):
-#                         # print(f"neighindex {neighindex}, cols {neightbl.cols(index)}")
-#                         if neighindex < neightbl.cols(index):
-#                             return field(index)
-#                         else:
-#                             return None
-#                     else:
-#                         # assert isinstance(neighborhood, Edge2Vertex)
-#                         if neighindex < 2:
-#                             return field(index)
-#                         else:
-#                             assert False
-
-#                 return _field
-
-#         return acc()
-
-#     return conn
-
-
-# def broadcast(field, loc):
-#     class acc(Accessor):
-#         def __len__(self):
-#             return None  # for infinite neighbors it's always the same value...
-
-#         def __getitem__(self, neighindex):
-#             @field_dec(loc)
-#             def _field(index):
-#                 return field(index)
-
-#             return _field
-
-#     return acc()
 
 
 def atlas2d_to_field(atlas_field, location_type):
@@ -248,97 +197,6 @@ def assert_close(expected, actual):
     )
 
 
-# for each edge neighbor get the same node index, i.e.
-# node_index_stencil(node_index)[N](M) == M for all N
-# TODO how to write a sparse field in apply_stencil
-# def test_node_index_stencil():
-#     def node_index_stencil(node_index):
-#         return broadcast(node_index, LocationType.Edge)
-
-#     mesh, fs_edges, fs_nodes, edges_per_node = make_mesh()
-
-#     index_field = array_to_field(np.array(range(fs_nodes.size)), LocationType.Vertex)
-
-#     nodes_domain = list(range(fs_nodes.size))
-
-#     out = np.zeros((fs_nodes.size,))
-
-#     print(node_index_stencil(index_field)[1](20))
-
-#     # apply_stencil(
-#     #     node_index_stencil,
-#     #     [nodes_domain],
-#     #     [
-#     #         index_field,
-#     #     ],
-#     #     [out],
-#     # )
-#     # for i in range(fs_nodes.size):
-#     #     assert out[i] == i
-
-
-# test_node_index_stencil()
-
-
-# def sign_stencil(node_id):
-#     @stencil
-#     def sten(pole_edge: CurrentEdge, nodes_indices: Edge2Vertex):
-#         if pole_edge or node_id == nodes_indices[0]:
-#             return 1.0
-#         else:
-#             return -1.0
-
-#     return sten
-
-
-# @stencil
-# def validate_sign(
-#     node_index: CurrentVertex,
-#     pole_edges: Vertex2Edge,
-#     nodes_indices: Tuple[Vertex2Edge, Edge2Vertex],
-#     external_sign: Vertex2Edge,
-# ):
-#     sign_acc = lift(sign_stencil(node_index))(pole_edges, nodes_indices)
-
-#     for i in range(7):
-#         if sign_acc[i] and external_sign[i]:
-#             assert sign_acc[i] == external_sign[i]
-
-
-# @stencil
-# def sign_stencil(
-#     node_id: EdgeToCallingVertex, pole_edge: CurrentEdge, nodes_indices: Edge2Vertex
-# ):
-#     if pole_edge or node_id == nodes_indices[0]:
-#         return 1.0
-#     else:
-#         return -1.0
-
-
-# @stencil
-# def validate_sign(
-#     node_index: Tuple[CurrentVertex],
-#     pole_edges: Vertex2Edge,
-#     nodes_indices: Tuple[Vertex2Edge, Edge2Vertex],
-#     external_sign: Vertex2Edge,
-# ):
-#     sign_acc = lift(sign_stencil)(node_index, pole_edges, nodes_indices)
-
-#     for i in range(7):
-#         if sign_acc[i] and external_sign[i]:
-#             assert sign_acc[i] == external_sign[i]
-
-
-#     nodes_indices = e2v(node_index)
-#     # nodes_indices[0](edge_index)
-
-#     return if_(
-#         or_(pole_edge, node_index == nodes_indices[0]),
-#         constant_field(1.0),
-#         constant_field(-1.0),
-#     )
-
-
 def bool_reduce(acc):
     @field_dec(LocationType.Vertex)  # TODO
     def _field(field_index):
@@ -349,87 +207,6 @@ def bool_reduce(acc):
         return res
 
     return _field
-
-
-# def test_sign_field():
-#     def validate_sign(
-#         e2v,
-#         v2e,
-#         node_indices,
-#         pole_edges,
-#         external_sign,
-#     ):  # on vertices
-
-#         node_indices_of_neighbor_edge = v2e(e2v(node_indices))
-#         pole_flag_of_neighbor_edges = v2e(pole_edges)
-
-#         # TODO @acc
-#         def sign_acc(neigh_index):
-#             return if_(
-#                 pole_flag_of_neighbor_edges[neigh_index]
-#                 or (
-#                     node_indices,
-#                     LocationType.Edge == node_indices_of_neighbor_edge[0][neigh_index],
-#                 ),
-#                 constant_field(1.0),
-#                 constant_field(-1.0),
-#             )
-
-#         sign_acc = if_(
-#             pole_flag_of_neighbor_edges
-#             or (
-#                 broadcast(node_indices, LocationType.Edge)
-#                 == node_indices_of_neighbor_edge[0]
-#             ),
-#             broadcast(constant_field(1.0, LocationType.Edge), LocationType.Edge),
-#             broadcast(constant_field(-1.0, LocationType.Edge), LocationType.Edge),
-#         )
-
-#         @field_dec(LocationType.Vertex)
-#         def assert_fun(index):
-#             print(f"{sign_acc[2](index)} / {external_sign[2](index)} @ {index}")
-#             print(pole_flag_of_neighbor_edges[2])
-#             print(node_indices_of_neighbor_edge[2])
-#             print(node_indices_of_neighbor_edge[2][0])
-#             print(node_indices)
-#             print(
-#                 f"pole: {pole_flag_of_neighbor_edges[2](index)}, node_index: {node_indices(index)}, neigh_index_0: {node_indices_of_neighbor_edge[2][0](index)}"
-#             )
-#             assert sign_acc[2](index) == external_sign[2](index)
-
-#         return assert_fun
-
-#         # return bool_reduce(sign_acc == external_sign)
-
-#     mesh, fs_edges, fs_nodes, edges_per_node = make_mesh()
-#     sign_acc = make_sign_field(mesh, fs_nodes.size, edges_per_node)  # acc of rank 1
-
-#     edge_flags = np.array(mesh.edges.flags())
-#     pole_edges = array_to_field(
-#         np.array([Topology.check(flag, Topology.POLE) for flag in edge_flags]),
-#         LocationType.Edge,
-#     )
-#     index_field = array_to_field(np.array(range(fs_nodes.size)), LocationType.Vertex)
-
-#     nodes_domain = list(range(fs_nodes.size))
-
-#     out = np.zeros((fs_nodes.size,))
-
-#     apply_stencil(
-#         validate_sign,
-#         [nodes_domain],
-#         [
-#             make_connectivity_from_atlas(mesh.edges.node_connectivity),
-#             make_connectivity_from_atlas(mesh.nodes.edge_connectivity),
-#             index_field,
-#             pole_edges,
-#             sign_acc,
-#         ],
-#         [out],
-#     )
-
-
-# test_sign_field()
 
 
 def make_S(mesh, fs_edges):
@@ -453,9 +230,7 @@ def make_S(mesh, fs_edges):
     assert math.isclose(min(S_MYY), -2001577.7946404363)
     assert math.isclose(max(S_MYY), 2001577.7946404363)
 
-    return array_to_field(S_MXX, LocationType.Edge), array_to_field(
-        S_MYY, LocationType.Edge
-    )
+    return np_as_field(Edge)(S_MXX), np_as_field(Edge)(S_MYY)
 
 
 def make_vol(mesh):
@@ -533,25 +308,7 @@ def make_input_field(mesh, fs_nodes, edges_per_node):
 
     assert_close(0.0000000000000000, min(rzs))
     assert_close(1965.4980340735883, max(rzs))
-    return array_to_field(rzs[:, klevel], LocationType.Vertex)
-
-
-def sum_reduce(acc):
-    @field_dec(LocationType.Vertex)  # TODO
-    def _field(field_index):
-        res = 0
-        for i in range(len(acc)):
-            if acc[i][field_index]:
-                res += acc[i][field_index]
-        return res
-
-    return _field
-
-
-# def reduce_edges_to_vertices(v2e, edge_field):
-#     edge_acc = v2e(edge_field)
-#     # return edge_acc[0] + edge_acc[1]
-#     return sum_reduce(edge_acc)
+    return np_as_field(Vertex)(rzs[:, klevel])
 
 
 def compute_zavgS(e2v, pp, S_M):
@@ -743,9 +500,9 @@ def test_acc_of_acc():
 
 if __name__ == "__main__":
     # test_nabla()
-    # test_compute_zavgS()
+    test_compute_zavgS()
     # test_nabla_from_sign_stencil()
-    print(
-        "WORK ON accessor of accessor with neihgtable, but simple standalone example to check if derefencing works correctly"
-    )
-    test_acc_of_acc()
+    # print(
+    #     "WORK ON accessor of accessor with neihgtable, but simple standalone example to check if derefencing works correctly"
+    # )
+    # test_acc_of_acc()
