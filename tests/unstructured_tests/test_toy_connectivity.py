@@ -4,10 +4,8 @@ from unstructured.concepts import axis
 from unstructured.helpers import (
     array_as_field,
     element_access_to_field,
-    get_index_of_type,
-    remove_axis,
 )
-from unstructured.utils import remove_indices_of_axises
+from unstructured.utils import get_index_of_type, remove_axis, remove_indices_of_axises
 
 
 @axis()
@@ -155,8 +153,6 @@ def make_index_field(loc):
     @element_access_to_field(axises=(loc,))
     def fun(index):
         assert len(index) == 1
-        # print(index[0])
-        # assert isinstance(index, loc)
         return index[0].__index__()
 
     return fun
