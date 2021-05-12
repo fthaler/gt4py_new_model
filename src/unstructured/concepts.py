@@ -16,9 +16,7 @@ import itertools
 import operator
 from numbers import Number
 
-
-def print_axises(axises):
-    print([str(axis(0)) for axis in axises])
+from unstructured.utils import _tupelize
 
 
 class _FieldArithmetic:
@@ -39,7 +37,12 @@ class _FieldArithmetic:
     @staticmethod
     def _field_op(op):
         def fun(first, second):
+            if isinstance(second, Field):
+                assert first.axises == second.axises  # TODO order independant
+
             class _field(Field):
+                axises = first.axises
+
                 def __getitem__(self, index):
                     if isinstance(second, Field):
                         second_value = second[index]
@@ -97,7 +100,7 @@ def field_dec(axises):
     return inner_field_dec
 
 
-def axis(*, length=None):
+def axis(*, length=None, aliases=None):
     def _impl(cls):
         class _axis:
             def __init__(self, index):
@@ -119,17 +122,13 @@ def axis(*, length=None):
         if length is not None:
             setattr(_axis, "__len__", lambda self: length)
 
+        if aliases:
+            for i, alias in enumerate(aliases):
+                setattr(_axis, alias, _axis(i))
+
         return _axis
 
     return _impl
-
-
-def constant_field(c, loc):
-    @field_dec(loc)
-    def _field(index):
-        return c
-
-    return _field
 
 
 def if_(cond, true_branch, false_branch):
@@ -139,16 +138,9 @@ def if_(cond, true_branch, false_branch):
 
     @field_dec(true_branch.axises)
     def _field(index):
-        return true_branch(index) if cond(index) else false_branch(index)
+        return true_branch[index] if cond[index] else false_branch[index]
 
     return _field
-
-
-def _tupelize(tup):
-    if isinstance(tup, tuple):
-        return tup
-    else:
-        return (tup,)
 
 
 def reduce(op, init):
@@ -179,50 +171,16 @@ def sum_reduce(dim):
 
 
 def apply_stencil(stencil, domain, connectivities_and_in_fields, out):
-    for indices in itertools.product(*domain):
+    assert len(domain) == 1  # TODO
+    indices, ind_type = domain[0]
+    for index in indices:
         fields_and_sparse_fields = stencil(*connectivities_and_in_fields)
         res = fields_and_sparse_fields[
-            indices
+            ind_type(index)
         ]  # TODO loop over neighbors in case of sparse_field
         if not isinstance(res, tuple):
             res = (res,)
 
         assert len(res) == len(out)
         for i in range(len(res)):
-            out[i][indices] = res[i]
-
-
-def field_slice(*index):
-    # TODO support multi-slice
-    assert len(index) == 1
-
-    def _fun(field):
-        for ind in index:
-            # TODO exactly one match
-            print(index)
-            print_axises(field.axises)
-            assert any(isinstance(ind, axis) for axis in field.axises)
-
-        class _SlicedField:
-            axises = tuple(axis for axis in field.axises if not isinstance(index, axis))
-
-            def __getitem__(self, indices):
-                indices = _tupelize(indices)
-                # if not isinstance(indices, tuple):
-                #     indices = (indices,)
-
-                # TODO assert all indices have a matching axis (and there are no duplicated indices)
-
-                # print((index,) + indices)
-                return field[index + indices]
-
-        return _SlicedField()
-
-    return _fun
-
-
-# @enum.unique
-# class LocationType(enum.IntEnum):
-#     Vertex = 0
-#     Edge = 1
-#     Cell = 2
+            out[i][index] = res[i]

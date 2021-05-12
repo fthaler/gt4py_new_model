@@ -11,7 +11,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from unstructured.concepts import Field, field_dec, _tupelize, field_slice, print_axises
+from unstructured.concepts import Field, _tupelize
+from unstructured.utils import remove_axises_from_axises
 
 
 def as_1d(arr):
@@ -22,37 +23,10 @@ def as_2d(arr, shape):
     return arr.reshape(*shape)
 
 
-# def array_to_field(arr, axises):
-#     @field_dec(axises)
-#     def get_item_to_index(*indices):
-#         return arr[indices]
-
-#     return get_item_to_index
-
-
-def remove_axis(axis, axises):
-    i = axises.index(axis)
-    return axises[:i] + axises[i + 1 :]
-
-
-def remove_axises_from_axises(to_remove, axises):
-    res = axises
-    for axis in to_remove:
-        res = remove_axis(axis, res)
-    return res
-
-
-def get_index_of_type(loc):
-    def fun(indices):
-        for ind in indices:
-            if isinstance(ind, loc):
-                return ind
-
-    return fun
-
-
 def make_field(element_access, bind_indices, axises):
-    class _sliced_field(Field):
+    axises = _tupelize(axises)
+
+    class _field(Field):
         def __init__(self):
             self.axises = remove_axises_from_axises(
                 (type(i) for i in bind_indices), axises
@@ -63,13 +37,14 @@ def make_field(element_access, bind_indices, axises):
             if len(indices) == len(self.axises):
                 return element_access(bind_indices + indices)
             else:
+                # field with `indices` bound
                 return make_field(
                     element_access,
                     indices,
                     self.axises,
                 )
 
-    return _sliced_field()
+    return _field()
 
 
 def element_access_to_field(*, axises):
@@ -103,3 +78,11 @@ def array_as_field(*dims):
         return element_access
 
     return _fun
+
+
+def constant_field(c, loc):
+    @element_access_to_field(axises=loc)
+    def _field(index):
+        return c
+
+    return _field

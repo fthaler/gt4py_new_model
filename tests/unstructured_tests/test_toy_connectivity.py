@@ -7,6 +7,7 @@ from unstructured.helpers import (
     get_index_of_type,
     remove_axis,
 )
+from unstructured.utils import remove_indices_of_axises
 
 
 @axis()
@@ -99,15 +100,6 @@ def test_remove_axis():
 #                 )
 
 #     return _sliced_field()
-
-
-def remove_indices_of_axises(axises, indices):
-    res = indices
-    for axis in axises:
-        types = tuple(type(i) for i in res)
-        i = types.index(axis)
-        res = res[:i] + res[i + 1 :]
-    return res
 
 
 def test_remove_indices():
