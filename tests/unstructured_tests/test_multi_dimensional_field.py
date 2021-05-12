@@ -1,10 +1,8 @@
-from typing import Type
-from attr import has
 import pytest
 import operator
 import numpy as np
 
-from unstructured.concepts import axis, field_slice, sum_reduce
+from unstructured.concepts import axis, sum_reduce
 from unstructured.helpers import array_as_field
 
 
@@ -122,22 +120,9 @@ def tupelize(tup):
         return (tup,)
 
 
-def test_slice():
-    class TestField:
-        axises = [GridDim, Vec2Dim]
-
-    print(field_slice(GridDim(1))(TestField()).axises)
-    # print(slice(GridDim(1))(TestField())[Vec2Dim(4)])
-
-
-# test_slice()
-
-
 def test_np_slice():
     grid_vec2 = np.zeros((42, 2))
     my_field = array_as_field(GridDim, Vec2Dim)(grid_vec2)
-
-    # my_field[GridDim(23), Vec2Dim(0)]
 
     print(my_field[GridDim(23), Vec2Dim(0)])
     print(my_field[Vec2Dim(1), GridDim(23)])
@@ -145,9 +130,6 @@ def test_np_slice():
     print(slized)
     slized[GridDim(41)]
     print(my_field[Vec2Dim(1)][GridDim(24)])
-
-
-# test_np_slice()
 
 
 def test_reduce():
