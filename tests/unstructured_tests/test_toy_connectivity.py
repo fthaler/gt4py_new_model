@@ -79,27 +79,6 @@ def test_remove_axis():
     assert remove_axis(E2V, axises) == (Edge, Vertex)
 
 
-# def make_field(element_access, bind_indices, axises):
-#     class _sliced_field(Field):
-#         def __init__(self):
-#             self.axises = remove_axises_from_axises(
-#                 (type(i) for i in bind_indices), axises
-#             )
-
-#         def __getitem__(self, indices):
-#             indices = _tupelize(indices)
-#             if len(indices) == len(self.axises):
-#                 return element_access(bind_indices + indices)
-#             else:
-#                 return make_field(
-#                     element_access,
-#                     indices,
-#                     self.axises,
-#                 )
-
-#     return _sliced_field()
-
-
 def test_remove_indices():
     removed = remove_indices_of_axises(
         (Edge, Vertex), (Edge(0), V2E(1), Vertex(2), E2V(3))
