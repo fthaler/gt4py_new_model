@@ -17,6 +17,10 @@ import operator
 from numbers import Number
 
 
+def print_axises(axises):
+    print([str(axis(0)) for axis in axises])
+
+
 class _FieldArithmetic:
     SUPPORTED_OPS = [
         "__mul__",
@@ -107,7 +111,10 @@ def axis(*, length=None):
                 return self.index
 
             def __str__(self):
-                return cls.__name__
+                return f"{cls.__name__}({self.index})"
+
+            def __eq__(self, other):
+                return type(self) == type(other) and self.index == other.__index__()
 
         if length is not None:
             setattr(_axis, "__len__", lambda self: length)
@@ -193,7 +200,7 @@ def field_slice(*index):
         for ind in index:
             # TODO exactly one match
             print(index)
-            print(field.axises)
+            print_axises(field.axises)
             assert any(isinstance(ind, axis) for axis in field.axises)
 
         class _SlicedField:

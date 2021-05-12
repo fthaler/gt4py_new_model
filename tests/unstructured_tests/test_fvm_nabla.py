@@ -34,7 +34,7 @@ from atlas4py import (
 import numpy as np
 import math
 
-from unstructured.helpers import np_as_field
+from unstructured.helpers import array_as_field
 
 
 @axis(length=None)
@@ -57,23 +57,16 @@ class E2V:
     pass
 
 
-def get_index_of_type(loc):
-    def fun(indices):
-        for ind in indices:
-            if isinstance(ind, loc):
-                return ind.__index__()
-
-    return fun
+# tup = (E2V(1), V2E(3))
+# print(get_index_of_type(E2V)(tup))
+# print(get_index_of_type(V2E)(tup))
+# exit(1)
 
 
-tup = (E2V(1), V2E(3))
-print(get_index_of_type(E2V)(tup))
-print(get_index_of_type(V2E)(tup))
-exit(1)
-
-
-def make_connectivity_from_atlas(neightbl, primary_loc, neigh_loc):
+def make_connectivity_from_atlas(neightbl, origin_loc, primary_loc, neigh_loc):
     def conn(field):
+        assert origin_loc in field.axises
+
         class sparse_field(Field):
             # def __len__(self):
             #     if isinstance(neightbl, IrregularConnectivity):
@@ -86,14 +79,15 @@ def make_connectivity_from_atlas(neightbl, primary_loc, neigh_loc):
                 if isinstance(indices, tuple):
                     # TODO assert that they have the right dimension types
                     primary_index = get_index_of_type(primary_loc)(indices)
+                    neighindex = get_index_of_type(neigh_loc)(indices)
                     if isinstance(neightbl, IrregularConnectivity):
-                        if neighindex < neightbl.cols(index):
-                            return neightbl[index, neighindex]
+                        if neighindex < neightbl.cols(primary_index):
+                            return field[neightbl[primary_index, neighindex]]
                         else:
                             return None
                     else:
                         if neighindex < 2:
-                            return neightbl[index, neighindex]
+                            return field[neightbl[primary_index, neighindex]]
                         else:
                             assert False
 
@@ -230,7 +224,7 @@ def make_S(mesh, fs_edges):
     assert math.isclose(min(S_MYY), -2001577.7946404363)
     assert math.isclose(max(S_MYY), 2001577.7946404363)
 
-    return np_as_field(Edge)(S_MXX), np_as_field(Edge)(S_MYY)
+    return array_as_field(Edge)(S_MXX), array_as_field(Edge)(S_MYY)
 
 
 def make_vol(mesh):
@@ -308,7 +302,7 @@ def make_input_field(mesh, fs_nodes, edges_per_node):
 
     assert_close(0.0000000000000000, min(rzs))
     assert_close(1965.4980340735883, max(rzs))
-    return np_as_field(Vertex)(rzs[:, klevel])
+    return array_as_field(Vertex)(rzs[:, klevel])
 
 
 def compute_zavgS(e2v, pp, S_M):

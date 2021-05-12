@@ -4,8 +4,8 @@ import pytest
 import operator
 import numpy as np
 
-from unstructured.concepts import axis, sum_reduce
-from unstructured.helpers import np_as_field
+from unstructured.concepts import axis, field_slice, sum_reduce
+from unstructured.helpers import array_as_field
 
 
 @axis()
@@ -54,6 +54,10 @@ def test_indexing():
     assert a_vec2[Vec2Dim(1)] == 43
     with pytest.raises(IndexError):
         operator.index(Vec2Dim(2))
+
+    assert Vec2Dim(1) != GridDim(1)
+    assert Vec2Dim(1) == Vec2Dim(1)
+    assert Vec2Dim(1) != Vec2Dim(0)
 
 
 test_indexing()
@@ -122,7 +126,7 @@ def test_slice():
     class TestField:
         axises = [GridDim, Vec2Dim]
 
-    print(slice(GridDim(1))(TestField()).axises)
+    print(field_slice(GridDim(1))(TestField()).axises)
     # print(slice(GridDim(1))(TestField())[Vec2Dim(4)])
 
 
@@ -131,7 +135,7 @@ def test_slice():
 
 def test_np_slice():
     grid_vec2 = np.zeros((42, 2))
-    my_field = np_as_field(GridDim, Vec2Dim)(grid_vec2)
+    my_field = array_as_field(GridDim, Vec2Dim)(grid_vec2)
 
     # my_field[GridDim(23), Vec2Dim(0)]
 
@@ -148,7 +152,7 @@ def test_np_slice():
 
 def test_reduce():
     grid_vec2 = np.ones((42, 2))
-    my_field = np_as_field(GridDim, Vec2Dim)(grid_vec2)
+    my_field = array_as_field(GridDim, Vec2Dim)(grid_vec2)
 
     reduced_field = sum_reduce(Vec2Dim)(my_field)
     for axis in reduced_field.axises:
