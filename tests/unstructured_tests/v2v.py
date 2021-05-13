@@ -11,8 +11,6 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from abc import ABC, abstractmethod
-import itertools
 from unstructured.concepts import LocationType, apply_stencil, field_dec
 from unstructured.helpers import as_1d, as_2d, array_to_field
 import numpy as np
