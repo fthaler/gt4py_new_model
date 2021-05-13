@@ -23,11 +23,12 @@ def as_2d(arr, shape):
     return arr.reshape(*shape)
 
 
-def make_field(element_access, bind_indices, axises):
+def make_field(element_access, bind_indices, axises, element_type):
     axises = _tupelize(axises)
 
     class _field(Field):
         def __init__(self):
+            self.element_type = element_type
             self.axises = remove_axises_from_axises(
                 (type(i) for i in bind_indices), axises
             )
@@ -38,23 +39,19 @@ def make_field(element_access, bind_indices, axises):
                 return element_access(bind_indices + indices)
             else:
                 # field with `indices` bound
-                return make_field(
-                    element_access,
-                    indices,
-                    self.axises,
-                )
+                return make_field(element_access, indices, self.axises, element_type)
 
     return _field()
 
 
-def element_access_to_field(*, axises):
+def element_access_to_field(*, axises, element_type):
     def _fun(element_access):
-        return make_field(element_access, tuple(), axises)
+        return make_field(element_access, tuple(), axises, element_type)
 
     return _fun
 
 
-def array_as_field(*dims):
+def array_as_field(*dims, element_type=None):
     def _fun(np_arr):
         assert np_arr.ndim == len(dims)
         for i in range(len(dims)):
@@ -63,7 +60,7 @@ def array_as_field(*dims):
                     len(dims[i](0)) == np_arr.shape[i]
                 )  # TODO dim[i](0) assumes I can construct the index 0
 
-        @element_access_to_field(axises=dims)
+        @element_access_to_field(axises=dims, element_type=element_type)
         def element_access(indices):
             def _order_indices(indices):
                 lst = []
@@ -81,7 +78,7 @@ def array_as_field(*dims):
 
 
 def constant_field(c, loc):
-    @element_access_to_field(axises=loc)
+    @element_access_to_field(axises=loc, element_type=type(c))
     def _field(index):
         return c
 

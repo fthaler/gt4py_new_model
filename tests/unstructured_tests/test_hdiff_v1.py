@@ -54,7 +54,9 @@ def make_fivepoint(shape_2d):
                 else:
                     assert False
 
-            @element_access_to_field(axises=field.axises + (FP,))
+            @element_access_to_field(
+                axises=field.axises + (FP,), element_type=field.element_type
+            )
             def elem_access(indices):
                 v_index = get_index_of_type(Vertex)(indices)
                 fp_index = get_index_of_type(FP)(indices)

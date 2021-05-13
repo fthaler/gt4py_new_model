@@ -99,7 +99,8 @@ def make_connectivity(neigh_loc, neigh_tbl):
             raise TypeError("Incompatible field passed to connectivity.")
 
         @element_access_to_field(
-            axises=remove_axis(neigh_loc, field.axises) + neigh_tbl.axises
+            axises=remove_axis(neigh_loc, field.axises) + neigh_tbl.axises,
+            element_type=field.element_type,
         )
         def element_access(indices):
             field_index = neigh_tbl[
@@ -129,7 +130,7 @@ def edge_field():
 
 
 def make_index_field(loc):
-    @element_access_to_field(axises=(loc,))
+    @element_access_to_field(axises=(loc,), element_type=int)
     def fun(index):
         assert len(index) == 1
         return index[0].__index__()

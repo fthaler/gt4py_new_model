@@ -39,9 +39,14 @@ class _FieldArithmetic:
         def fun(first, second):
             if isinstance(second, Field):
                 assert first.axises == second.axises  # TODO order independant
+                print(first.element_type)
+                print(second.element_type)
+                if first.element_type is not None and second.element_type is not None:
+                    assert first.element_type == second.element_type
 
             class _field(Field):
                 axises = first.axises
+                element_type = first.element_type
 
                 def __getitem__(self, index):
                     if isinstance(second, Field):
@@ -83,13 +88,14 @@ class Field(_FieldArithmetic):
     pass
 
 
-def field_dec(axises):
+def field_dec(axises, *, element_type=None):
     axises = _tupelize(axises)
 
     def inner_field_dec(fun):
         class _field(Field):
             def __init__(self):
                 self.axises = axises
+                self.element_type = element_type
 
             def __getitem__(self, index):
                 index = _tupelize(index)
