@@ -11,12 +11,70 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import enum
-import itertools
 import operator
 from numbers import Number
 
-from unstructured.utils import _tupelize
+from unstructured.utils import (
+    print_axises,
+    tupelize,
+    remove_axis,
+    remove_axises_from_axises,
+    split_indices,
+)
+
+
+def make_field(element_access, bind_indices, axises, element_type):
+    axises = tupelize(axises)
+
+    class _field(Field):
+        def __init__(self):
+            self.element_type = element_type
+            self.axises = remove_axises_from_axises(
+                (type(i) for i in bind_indices), axises
+            )
+
+        def __getitem__(self, indices):
+            if isinstance(indices, Field):
+                return field_getitem(self, indices)
+
+            else:
+                indices = tupelize(indices)
+                if len(indices) == len(self.axises):
+                    return element_access(bind_indices + indices)
+                else:
+                    # field with `indices` bound
+                    return make_field(
+                        element_access, indices, self.axises, element_type
+                    )
+
+    return _field()
+
+
+def element_access_to_field(*, axises, element_type):
+    def _fun(element_access):
+        return make_field(element_access, tuple(), axises, element_type)
+
+    return _fun
+
+
+def field_getitem(field, index_field):
+    assert index_field.element_type is not None
+    if index_field.element_type is None:
+        raise TypeError("Is not an index field, missing element type.")
+    if not index_field.element_type in field.axises:
+        raise TypeError("Incompatible index field passed.")
+
+    @element_access_to_field(
+        axises=(
+            remove_axis(index_field.element_type, field.axises) + index_field.axises
+        ),
+        element_type=field.element_type,
+    )
+    def element_access(indices):
+        index_field_indices, rest = split_indices(indices, index_field.axises)
+        return field[(index_field[index_field_indices],) + rest]
+
+    return element_access
 
 
 class _FieldArithmetic:
@@ -89,7 +147,7 @@ class Field(_FieldArithmetic):
 
 
 def field_dec(axises, *, element_type=None):
-    axises = _tupelize(axises)
+    axises = tupelize(axises)
 
     def inner_field_dec(fun):
         class _field(Field):
@@ -98,43 +156,12 @@ def field_dec(axises, *, element_type=None):
                 self.element_type = element_type
 
             def __getitem__(self, index):
-                index = _tupelize(index)
+                index = tupelize(index)
                 return fun(index)
 
         return _field()
 
     return inner_field_dec
-
-
-def axis(*, length=None, aliases=None):
-    def _impl(cls):
-        class _axis:
-            def __init__(self, index):
-                self.index = index
-
-            def __index__(self):
-                if length is not None:
-                    if self.index >= length:
-                        raise IndexError()
-
-                return self.index
-
-            def __str__(self):
-                return f"{cls.__name__}({self.index})"
-
-            def __eq__(self, other):
-                return type(self) == type(other) and self.index == other.__index__()
-
-        if length is not None:
-            setattr(_axis, "__len__", lambda self: length)
-
-        if aliases:
-            for i, alias in enumerate(aliases):
-                setattr(_axis, alias, _axis(i))
-
-        return _axis
-
-    return _impl
 
 
 def if_(cond, true_branch, false_branch):
@@ -159,7 +186,7 @@ def reduce(op, init):
                 axises = tuple(axis for axis in field.axises if not axis is dim)
 
                 def __getitem__(self, indices):
-                    indices = _tupelize(indices)
+                    indices = tupelize(indices)
                     res = init
                     for i in range(len(dim(0))):
                         res = op(res, field[(dim(i),) + indices])

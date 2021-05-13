@@ -15,8 +15,6 @@ from typing import Tuple
 from unstructured.concepts import (
     Field,
     apply_stencil,
-    axis,
-    constant_field,
     field_dec,
     if_,
 )
@@ -35,6 +33,7 @@ import numpy as np
 import math
 
 from unstructured.helpers import array_as_field
+from unstructured.utils import axis
 
 
 @axis(length=None)

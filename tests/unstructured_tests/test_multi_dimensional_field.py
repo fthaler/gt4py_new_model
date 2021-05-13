@@ -2,7 +2,8 @@ import pytest
 import operator
 import numpy as np
 
-from unstructured.concepts import axis, sum_reduce
+from unstructured.concepts import sum_reduce
+from unstructured.utils import axis
 from unstructured.helpers import array_as_field
 
 

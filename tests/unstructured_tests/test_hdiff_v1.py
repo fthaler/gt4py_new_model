@@ -2,14 +2,13 @@ import math
 import numpy as np
 from unstructured.concepts import (
     apply_stencil,
-    axis,
+    element_access_to_field,
     if_,
 )
 from unstructured.helpers import (
     array_as_field,
     as_1d,
     as_2d,
-    element_access_to_field,
     constant_field,
 )
 
@@ -17,6 +16,7 @@ from unstructured.utils import (
     get_index_of_type,
     print_axises,
     remove_indices_of_axises,
+    axis,
 )
 from .hdiff_reference import hdiff_reference
 

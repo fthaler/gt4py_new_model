@@ -11,8 +11,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from unstructured.concepts import Field, _tupelize
-from unstructured.utils import remove_axises_from_axises
+from unstructured.concepts import element_access_to_field
 
 
 def as_1d(arr):
@@ -21,34 +20,6 @@ def as_1d(arr):
 
 def as_2d(arr, shape):
     return arr.reshape(*shape)
-
-
-def make_field(element_access, bind_indices, axises, element_type):
-    axises = _tupelize(axises)
-
-    class _field(Field):
-        def __init__(self):
-            self.element_type = element_type
-            self.axises = remove_axises_from_axises(
-                (type(i) for i in bind_indices), axises
-            )
-
-        def __getitem__(self, indices):
-            indices = _tupelize(indices)
-            if len(indices) == len(self.axises):
-                return element_access(bind_indices + indices)
-            else:
-                # field with `indices` bound
-                return make_field(element_access, indices, self.axises, element_type)
-
-    return _field()
-
-
-def element_access_to_field(*, axises, element_type):
-    def _fun(element_access):
-        return make_field(element_access, tuple(), axises, element_type)
-
-    return _fun
 
 
 def array_as_field(*dims, element_type=None):

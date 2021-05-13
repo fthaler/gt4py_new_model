@@ -1,11 +1,16 @@
 import numpy as np
 import pytest
-from unstructured.concepts import axis
 from unstructured.helpers import (
     array_as_field,
     element_access_to_field,
 )
-from unstructured.utils import get_index_of_type, remove_axis, remove_indices_of_axises
+from unstructured.utils import (
+    get_index_of_type,
+    print_axises,
+    remove_axis,
+    remove_indices_of_axises,
+    axis,
+)
 
 
 @axis()
@@ -26,6 +31,39 @@ class E2V:
 @axis(length=4)
 class V2E:
     pass
+
+
+@pytest.fixture
+def vertex_field():
+    return array_as_field(Vertex)(np.ones([9]))
+
+
+@pytest.fixture
+def edge_field():
+    return array_as_field(Edge)(np.ones([18]))
+
+
+def make_index_field(loc):
+    @element_access_to_field(axises=(loc,), element_type=int)
+    def fun(index):
+        assert len(index) == 1
+        return index[0].__index__()
+
+    return fun
+
+
+@pytest.fixture
+def edge_index_field():
+    return make_index_field(Edge)
+
+
+@pytest.fixture
+def vertex_index_field():
+    return make_index_field(Vertex)
+
+
+def test_index_field(edge_index_field):
+    assert all([i == edge_index_field[Edge(i)] for i in range(18)])
 
 
 e2v_arr = np.array(
@@ -71,6 +109,17 @@ v2e_arr = np.array(
 v2e_neightbl = array_as_field(Vertex, V2E, element_type=Edge)(v2e_arr)
 
 
+def test_neightbl():
+    vertex_index_field = make_index_field(Vertex)
+    e2v_field = vertex_index_field[e2v_neightbl]
+    print(e2v_field.axises)
+    print_axises(e2v_field.axises)
+    assert e2v_field[Edge(4), E2V(1)] == 5
+
+
+# test_neightbl()
+
+
 def test_element_type():
     assert v2e_neightbl.element_type == Edge
     assert e2v_neightbl.element_type == Vertex
@@ -100,63 +149,37 @@ def test_remove_indices():
 # Connectivity LocA2LocB means give me neighbors of type LocB from LocA,
 # i.e. it takes Field[LocB] and returns Field[LocA, LocA2LocB]
 # neigh_tbl is Field[LocA, LocA2LocB] where elements are the indices in LocB
-def make_connectivity(neigh_loc, neigh_tbl):
+# def make_connectivity(neigh_loc, neigh_tbl):
+#     def _conn(field):
+#         if neigh_loc not in field.axises:
+#             raise TypeError("Incompatible field passed to connectivity.")
+
+#         @element_access_to_field(
+#             axises=remove_axis(neigh_loc, field.axises) + neigh_tbl.axises,
+#             element_type=field.element_type,
+#         )
+#         def element_access(indices):
+#             field_index = neigh_tbl[
+#                 get_index_of_type(neigh_tbl.axises[0])(indices),
+#                 get_index_of_type(neigh_tbl.axises[1])(indices),
+#             ]
+
+#             new_indices = (field_index,) + remove_indices_of_axises(
+#                 (neigh_tbl.axises[0], neigh_tbl.axises[1]), indices
+#             )
+
+#             return field[new_indices]
+
+#         return element_access
+
+#     return _conn
+
+
+def make_connectivity(_, neigh_tbl):
     def _conn(field):
-        if neigh_loc not in field.axises:
-            raise TypeError("Incompatible field passed to connectivity.")
-
-        @element_access_to_field(
-            axises=remove_axis(neigh_loc, field.axises) + neigh_tbl.axises,
-            element_type=field.element_type,
-        )
-        def element_access(indices):
-            field_index = neigh_tbl[
-                get_index_of_type(neigh_tbl.axises[0])(indices),
-                get_index_of_type(neigh_tbl.axises[1])(indices),
-            ]
-
-            new_indices = (field_index,) + remove_indices_of_axises(
-                (neigh_tbl.axises[0], neigh_tbl.axises[1]), indices
-            )
-
-            return field[new_indices]
-
-        return element_access
+        return field[neigh_tbl]
 
     return _conn
-
-
-@pytest.fixture
-def vertex_field():
-    return array_as_field(Vertex)(np.ones([9]))
-
-
-@pytest.fixture
-def edge_field():
-    return array_as_field(Edge)(np.ones([18]))
-
-
-def make_index_field(loc):
-    @element_access_to_field(axises=(loc,), element_type=int)
-    def fun(index):
-        assert len(index) == 1
-        return index[0].__index__()
-
-    return fun
-
-
-@pytest.fixture
-def edge_index_field():
-    return make_index_field(Edge)
-
-
-@pytest.fixture
-def vertex_index_field():
-    return make_index_field(Vertex)
-
-
-def test_index_field(edge_index_field):
-    assert all([i == edge_index_field[Edge(i)] for i in range(18)])
 
 
 @pytest.fixture
