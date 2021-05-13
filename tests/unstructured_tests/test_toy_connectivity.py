@@ -51,7 +51,7 @@ e2v_arr = np.array(
     ]
 )
 
-e2v_neightbl = array_as_field(Edge, E2V)(e2v_arr)
+e2v_neightbl = array_as_field(Edge, E2V, element_type=Vertex)(e2v_arr)
 
 # order east, north, west, south (counter-clock wise)
 v2e_arr = np.array(
@@ -68,7 +68,14 @@ v2e_arr = np.array(
     ]
 )
 
-v2e_neightbl = array_as_field(Vertex, V2E)(v2e_arr)
+v2e_neightbl = array_as_field(Vertex, V2E, element_type=Edge)(v2e_arr)
+
+
+def test_element_type():
+    assert v2e_neightbl.element_type == Edge
+    assert e2v_neightbl.element_type == Vertex
+    assert isinstance(e2v_neightbl[Edge(1), E2V(0)], Vertex)
+    assert isinstance(v2e_neightbl[Vertex(1), V2E(0)], Edge)
 
 
 def test_remove_axis():
@@ -108,7 +115,7 @@ def make_connectivity(neigh_loc, neigh_tbl):
                 get_index_of_type(neigh_tbl.axises[1])(indices),
             ]
 
-            new_indices = (neigh_loc(field_index),) + remove_indices_of_axises(
+            new_indices = (field_index,) + remove_indices_of_axises(
                 (neigh_tbl.axises[0], neigh_tbl.axises[1]), indices
             )
 

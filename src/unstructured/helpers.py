@@ -70,7 +70,8 @@ def array_as_field(*dims, element_type=None):
                 return tuple(lst)
 
             assert len(indices) == len(dims)
-            return np_arr[_order_indices(indices)]
+            element = np_arr[_order_indices(indices)]
+            return element_type(element) if element_type is not None else element
 
         return element_access
 
