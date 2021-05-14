@@ -15,9 +15,12 @@ from typing import Tuple
 from unstructured.concepts import (
     Field,
     apply_stencil,
+    element_access_to_field,
     field_dec,
     if_,
+    sum_reduce,
 )
+from unstructured.helpers import array_as_field
 from atlas4py import (
     StructuredGrid,
     Topology,
@@ -32,8 +35,7 @@ from atlas4py import (
 import numpy as np
 import math
 
-from unstructured.helpers import array_as_field
-from unstructured.utils import axis
+from unstructured.utils import axis, get_index_of_type
 
 
 @axis(length=None)
@@ -62,69 +64,35 @@ class E2V:
 # exit(1)
 
 
-def make_connectivity_from_atlas(neightbl, origin_loc, primary_loc, neigh_loc):
-    def conn(field):
-        assert origin_loc in field.axises
+def make_sparse_index_field_from_atlas_connectivity(
+    atlas_connectivity, primary_loc, neigh_loc, field_loc
+):
+    @element_access_to_field(axises=(primary_loc, neigh_loc), element_type=field_loc)
+    def element_access(indices):
+        primary_index = get_index_of_type(primary_loc)(indices)
+        neigh_index = get_index_of_type(neigh_loc)(indices)
+        if isinstance(atlas_connectivity, IrregularConnectivity):
+            if neigh_index.__index__() < atlas_connectivity.cols(
+                primary_index.__index__()
+            ):
+                return field_loc(
+                    atlas_connectivity[
+                        primary_index.__index__(), neigh_index.__index__()
+                    ]
+                )
+            else:
+                return None
+        else:
+            if neigh_index.__index__() < 2:
+                return field_loc(
+                    atlas_connectivity[
+                        primary_index.__index__(), neigh_index.__index__()
+                    ]
+                )
+            else:
+                assert False
 
-        class sparse_field(Field):
-            # def __len__(self):
-            #     if isinstance(neightbl, IrregularConnectivity):
-            #         return 7  # TODO!
-            #     else:
-            #         # assert isinstance(neighborhood, Edge2Vertex)
-            #         return 2
-
-            def __getitem__(self, indices):
-                if isinstance(indices, tuple):
-                    # TODO assert that they have the right dimension types
-                    primary_index = get_index_of_type(primary_loc)(indices)
-                    neighindex = get_index_of_type(neigh_loc)(indices)
-                    if isinstance(neightbl, IrregularConnectivity):
-                        if neighindex < neightbl.cols(primary_index):
-                            return field[neightbl[primary_index, neighindex]]
-                        else:
-                            return None
-                    else:
-                        if neighindex < 2:
-                            return field[neightbl[primary_index, neighindex]]
-                        else:
-                            assert False
-
-                # def index_fun(index):
-                #     if isinstance(index, tuple):
-                #         index = index[0]
-                #     if isinstance(neightbl, IrregularConnectivity):
-                #         if neighindex < neightbl.cols(index):
-                #             return neightbl[index, neighindex]
-                #         else:
-                #             return None
-                #     else:
-                #         if neighindex < 2:
-                #             return neightbl[index, neighindex]
-                #         else:
-                #             assert False
-
-                # @field_dec(
-                #     Vertex  # ,
-                #     # index_fun=lambda index: index_fun(field.index_fun(index)),
-                # )  # TODO!
-                # def _field(index):
-                #     idx = index_fun(index)
-                #     if idx is not None:
-                #         return field[idx]
-                #     else:
-                #         return None
-
-                # return _field
-
-        return sparse_field()
-
-    return conn
-
-
-def atlas2d_to_field(atlas_field, location_type):
-    # make column field a pure horizontal field
-    return array_to_field(np.array(atlas_field, copy=False)[:, 0], location_type)
+    return element_access
 
 
 def make_mesh():
@@ -181,7 +149,8 @@ def make_sign_field(mesh, nodes_size, edges_per_node):
                 node2edge_sign[jnode, jedge] = -1.0
                 if is_pole_edge(iedge):
                     node2edge_sign[jnode, jedge] = 1.0
-    return sparsefield_to_accessor_of_fields(node2edge_sign, 7)
+    # return sparsefield_to_accessor_of_fields(node2edge_sign, 7)
+    return array_as_field(Vertex, V2E)(node2edge_sign)
 
 
 def assert_close(expected, actual):
@@ -241,7 +210,7 @@ def make_vol(mesh):
     # VOL(min/max):  57510668192.214096    851856184496.32886
     assert_close(57510668192.214096, min(vol))
     assert_close(851856184496.32886, max(vol))
-    return array_to_field(vol, LocationType.Vertex)
+    return array_as_field(Vertex)(vol)
 
 
 def make_input_field(mesh, fs_nodes, edges_per_node):
@@ -306,23 +275,15 @@ def make_input_field(mesh, fs_nodes, edges_per_node):
 
 def compute_zavgS(e2v, pp, S_M):
     pp_neighs = e2v(pp)
-    zavg = 0.5 * (pp_neighs[0] + pp_neighs[1])
+    zavg = 0.5 * (pp_neighs[E2V(0)] + pp_neighs[E2V(1)])
     return S_M * zavg
 
 
 def compute_pnabla(e2v, v2e, pp, S_M, sign, vol):
     zavgS = v2e(compute_zavgS(e2v, pp, S_M))
-    pnabla_M = sum_reduce(zavgS * sign)
+    pnabla_M = sum_reduce(V2E)(zavgS * sign)
 
     return pnabla_M / vol
-
-
-def make_tuple(*fields):
-    @field_dec(LocationType.Vertex)  # TODO
-    def _field(index):
-        return tuple(map(lambda f: f[index], fields))
-
-    return _field
 
 
 def nabla(
@@ -340,6 +301,10 @@ def nabla(
     )
 
 
+def make_connectivity(index_field):
+    return lambda field: field[index_field]
+
+
 def test_compute_zavgS():
     mesh, fs_edges, fs_nodes, edges_per_node = make_mesh()
 
@@ -350,10 +315,16 @@ def test_compute_zavgS():
 
     zavgS = np.zeros((fs_edges.size))
 
+    e2v_conn = make_connectivity(
+        make_sparse_index_field_from_atlas_connectivity(
+            mesh.edges.node_connectivity, Edge, E2V, Vertex
+        )
+    )
+
     apply_stencil(
         compute_zavgS,
-        [edge_domain],
-        [make_connectivity_from_atlas(mesh.edges.node_connectivity), pp, S_MXX],
+        [(edge_domain, Edge)],
+        [e2v_conn, pp, S_MXX],
         [zavgS],
     )
     assert_close(-199755464.25741270, min(zavgS))
@@ -361,8 +332,8 @@ def test_compute_zavgS():
 
     apply_stencil(
         compute_zavgS,
-        [edge_domain],
-        [make_connectivity_from_atlas(mesh.edges.node_connectivity), pp, S_MYY],
+        [(edge_domain, Edge)],
+        [e2v_conn, pp, S_MYY],
         [zavgS],
     )
     assert_close(-1000788897.3202186, min(zavgS))
@@ -385,20 +356,44 @@ def test_nabla():
     print(f"nodes: {fs_nodes.size}")
     print(f"edges: {fs_edges.size}")
 
+    e2v_conn = make_connectivity(
+        make_sparse_index_field_from_atlas_connectivity(
+            mesh.edges.node_connectivity, Edge, E2V, Vertex
+        )
+    )
+    v2e_conn = make_connectivity(
+        make_sparse_index_field_from_atlas_connectivity(
+            mesh.nodes.edge_connectivity, Vertex, V2E, Edge
+        )
+    )
     apply_stencil(
-        nabla,
-        [nodes_domain],
+        compute_pnabla,
+        [(nodes_domain, Vertex)],
         [
-            make_connectivity_from_atlas(mesh.edges.node_connectivity),
-            make_connectivity_from_atlas(mesh.nodes.edge_connectivity),
+            e2v_conn,
+            v2e_conn,
             pp,
             S_MXX,
-            S_MYY,
             sign_acc,
             vol,
         ],
-        [pnabla_MXX, pnabla_MYY],
+        [pnabla_MXX],
     )
+
+    # apply_stencil(
+    #     nabla,
+    #     [(nodes_domain, Vertex)],
+    #     [
+    #         e2v_conn,
+    #         v2e_conn,
+    #         pp,
+    #         S_MXX,
+    #         S_MYY,
+    #         sign_acc,
+    #         vol,
+    #     ],
+    #     [pnabla_MXX, pnabla_MYY],
+    # )
 
     # apply_stencil(
     #     nabla,
@@ -413,8 +408,8 @@ def test_nabla():
 
     assert_close(-3.5455427772566003e-003, min(pnabla_MXX))
     assert_close(3.5455427772565435e-003, max(pnabla_MXX))
-    assert_close(-3.3540113705465301e-003, min(pnabla_MYY))
-    assert_close(3.3540113705465301e-003, max(pnabla_MYY))
+    # assert_close(-3.3540113705465301e-003, min(pnabla_MYY))
+    # assert_close(3.3540113705465301e-003, max(pnabla_MYY))
 
 
 def nabla_from_sign_stencil(
@@ -492,8 +487,8 @@ def test_acc_of_acc():
 
 
 if __name__ == "__main__":
-    # test_nabla()
-    test_compute_zavgS()
+    test_nabla()
+    # test_compute_zavgS()
     # test_nabla_from_sign_stencil()
     # print(
     #     "WORK ON accessor of accessor with neihgtable, but simple standalone example to check if derefencing works correctly"

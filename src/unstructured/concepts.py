@@ -72,7 +72,11 @@ def field_getitem(field, index_field):
     )
     def element_access(indices):
         index_field_indices, rest = split_indices(indices, index_field.axises)
-        return field[(index_field[index_field_indices],) + rest]
+        new_index = index_field[index_field_indices]
+        if new_index is not None:
+            return field[(new_index,) + rest]
+        else:
+            return None
 
     return element_access
 
@@ -97,8 +101,6 @@ class _FieldArithmetic:
         def fun(first, second):
             if isinstance(second, Field):
                 assert first.axises == second.axises  # TODO order independant
-                print(first.element_type)
-                print(second.element_type)
                 if first.element_type is not None and second.element_type is not None:
                     assert first.element_type == second.element_type
 
@@ -182,17 +184,19 @@ def reduce(op, init):
             raise TypeError("Dimension is not reducible")
 
         def _reduce(field):
-            class _ReducedField:
-                axises = tuple(axis for axis in field.axises if not axis is dim)
+            @element_access_to_field(
+                axises=remove_axis(dim, field.axises), element_type=field.element_type
+            )
+            def elem_access(indices):
+                indices = tupelize(indices)
+                res = init
+                for i in range(len(dim(0))):
+                    val = field[(dim(i),) + indices]
+                    if val is not None:
+                        res = op(res, val)
+                return res
 
-                def __getitem__(self, indices):
-                    indices = tupelize(indices)
-                    res = init
-                    for i in range(len(dim(0))):
-                        res = op(res, field[(dim(i),) + indices])
-                    return res
-
-            return _ReducedField()
+            return elem_access
 
         return _reduce
 

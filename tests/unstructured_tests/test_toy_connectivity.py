@@ -112,8 +112,6 @@ v2e_neightbl = array_as_field(Vertex, V2E, element_type=Edge)(v2e_arr)
 def test_neightbl():
     vertex_index_field = make_index_field(Vertex)
     e2v_field = vertex_index_field[e2v_neightbl]
-    print(e2v_field.axises)
-    print_axises(e2v_field.axises)
     assert e2v_field[Edge(4), E2V(1)] == 5
 
 
