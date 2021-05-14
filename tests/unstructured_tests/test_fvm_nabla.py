@@ -22,7 +22,7 @@ from atlas4py import (
 import numpy as np
 from unstructured.helpers import array_as_field
 
-from unstructured.utils import axis
+from unstructured.utils import axis, print_axises
 
 from .fvm_nabla_setup import (
     assert_close,
@@ -164,6 +164,80 @@ def test_nabla():
     assert_close(3.5455427772565435e-003, max(pnabla_MXX))
     assert_close(-3.3540113705465301e-003, min(pnabla_MYY))
     assert_close(3.3540113705465301e-003, max(pnabla_MYY))
+
+
+setup = nabla_setup()
+
+e2v_field = make_sparse_index_field_from_atlas_connectivity(
+    setup.edges2node_connectivity, Edge, E2V, Vertex
+)
+v2e_field = make_sparse_index_field_from_atlas_connectivity(
+    setup.nodes2edge_connectivity, Vertex, V2E, Edge
+)
+
+e2v_conn = make_connectivity(e2v_field)
+v2e_conn = make_connectivity(v2e_field)
+
+
+def compute_zavgS_glob(pp, S_M):
+    # pp_neighs = pp[e2v_field]
+    pp_neighs = e2v_conn(pp)
+    zavg = 0.5 * (pp_neighs[E2V(0)] + pp_neighs[E2V(1)])
+    return S_M * zavg
+
+
+def compute_pnabla_glob(pp, S_M, sign, vol):
+    # zavgS = compute_zavgS_glob(pp, S_M)[v2e_field]
+    zavgS = v2e_conn(compute_zavgS_glob(pp, S_M))
+    pnabla_M = sum_reduce(V2E)(zavgS * sign)
+
+    return pnabla_M / vol
+
+
+def nabla_glob(
+    pp,
+    S_MXX,
+    S_MYY,
+    sign,
+    vol,
+):
+    return compute_pnabla_glob(pp, S_MXX, sign, vol), compute_pnabla_glob(
+        pp, S_MYY, sign, vol
+    )
+
+
+def test_nabla_global_index_fields():
+    setup = nabla_setup()
+
+    sign_acc = array_as_field(Vertex, V2E)(setup.sign_field)
+    pp = array_as_field(Vertex)(setup.input_field)
+    S_MXX, S_MYY = tuple(map(array_as_field(Edge), setup.S_fields))
+    vol = array_as_field(Vertex)(setup.vol_field)
+
+    nodes_domain = list(range(setup.nodes_size))
+
+    pnabla_MXX = np.zeros((setup.nodes_size))
+    pnabla_MYY = np.zeros((setup.nodes_size))
+
+    print(f"nodes: {setup.nodes_size}")
+    print(f"edges: {setup.edges_size}")
+
+    apply_stencil(
+        nabla_glob,
+        [(nodes_domain, Vertex)],
+        [
+            pp,
+            S_MXX,
+            S_MYY,
+            sign_acc,
+            vol,
+        ],
+        [pnabla_MXX, pnabla_MYY],
+    )
+
+    assert_close(-3.5455427772566003e-003, min(pnabla_MXX))
+    assert_close(3.5455427772565435e-003, max(pnabla_MXX))
+    assert_close(-3.3540113705465301e-003, min(pnabla_MYY))
 
 
 # def nabla_from_sign_stencil(
