@@ -211,13 +211,8 @@ def apply_stencil(stencil, domain, connectivities_and_in_fields, out):
     assert len(domain) == 1  # TODO
     indices, ind_type = domain[0]
     for index in indices:
-        fields_and_sparse_fields = stencil(*connectivities_and_in_fields)
-        res = fields_and_sparse_fields[
-            ind_type(index)
-        ]  # TODO loop over neighbors in case of sparse_field
-        if not isinstance(res, tuple):
-            res = (res,)
-
-        assert len(res) == len(out)
-        for i in range(len(res)):
-            out[i][index] = res[i]
+        fields = tupelize(stencil(*connectivities_and_in_fields))
+        assert len(fields) == len(out)
+        for o, f in zip(out, fields):
+            # TODO sparse fields
+            o[index] = f[ind_type(index)]
