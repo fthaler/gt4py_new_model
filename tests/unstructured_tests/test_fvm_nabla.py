@@ -22,7 +22,7 @@ from atlas4py import (
 import numpy as np
 from unstructured.helpers import array_as_field
 
-from unstructured.utils import axis, print_axises
+from unstructured.utils import axis
 
 from .fvm_nabla_setup import (
     assert_close,
@@ -180,15 +180,15 @@ v2e_conn = make_connectivity(v2e_field)
 
 
 def compute_zavgS_glob(pp, S_M):
-    # pp_neighs = pp[e2v_field]
-    pp_neighs = e2v_conn(pp)
+    pp_neighs = pp[e2v_field]
+    # pp_neighs = e2v_conn(pp)
     zavg = 0.5 * (pp_neighs[E2V(0)] + pp_neighs[E2V(1)])
     return S_M * zavg
 
 
 def compute_pnabla_glob(pp, S_M, sign, vol):
-    # zavgS = compute_zavgS_glob(pp, S_M)[v2e_field]
-    zavgS = v2e_conn(compute_zavgS_glob(pp, S_M))
+    zavgS = compute_zavgS_glob(pp, S_M)[v2e_field]
+    # zavgS = v2e_conn(compute_zavgS_glob(pp, S_M))
     pnabla_M = sum_reduce(V2E)(zavgS * sign)
 
     return pnabla_M / vol
