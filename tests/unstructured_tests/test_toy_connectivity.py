@@ -2,11 +2,9 @@ import numpy as np
 import pytest
 from unstructured.helpers import (
     array_as_field,
-    element_access_to_field,
+    index_field,
 )
 from unstructured.utils import (
-    get_index_of_type,
-    print_axises,
     remove_axis,
     remove_indices_of_axises,
     axis,
@@ -43,23 +41,14 @@ def edge_field():
     return array_as_field(Edge)(np.ones([18]))
 
 
-def make_index_field(loc):
-    @element_access_to_field(axises=(loc,), element_type=int)
-    def fun(index):
-        assert len(index) == 1
-        return index[0].__index__()
-
-    return fun
-
-
 @pytest.fixture
 def edge_index_field():
-    return make_index_field(Edge)
+    return index_field(Edge)
 
 
 @pytest.fixture
 def vertex_index_field():
-    return make_index_field(Vertex)
+    return index_field(Vertex)
 
 
 def test_index_field(edge_index_field):
@@ -110,7 +99,7 @@ v2e_neightbl = array_as_field(Vertex, V2E, element_type=Edge)(v2e_arr)
 
 
 def test_neightbl():
-    vertex_index_field = make_index_field(Vertex)
+    vertex_index_field = index_field(Vertex)
     e2v_field = vertex_index_field[e2v_neightbl]
     assert e2v_field[Edge(4), E2V(1)] == 5
 

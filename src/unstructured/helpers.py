@@ -49,9 +49,21 @@ def array_as_field(*dims, element_type=None):
     return _fun
 
 
-def constant_field(c, loc):
-    @element_access_to_field(axises=loc, element_type=type(c))
-    def _field(index):
-        return c
+def constant_field(*dims):
+    def _impl(c):
+        @element_access_to_field(axises=dims, element_type=type(c))
+        def _field(_):
+            return c
 
-    return _field
+        return _field
+
+    return _impl
+
+
+def index_field(loc):
+    @element_access_to_field(axises=(loc,), element_type=int)
+    def fun(index):
+        assert len(index) == 1
+        return index[0].__index__()
+
+    return fun

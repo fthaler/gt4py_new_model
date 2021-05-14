@@ -13,6 +13,7 @@
 
 from unstructured.concepts import (
     apply_stencil,
+    broadcast,
     if_,
     sum_reduce,
 )
@@ -20,7 +21,7 @@ from atlas4py import (
     Topology,
 )
 import numpy as np
-from unstructured.helpers import array_as_field
+from unstructured.helpers import array_as_field, constant_field, index_field
 
 from unstructured.utils import axis
 
@@ -55,6 +56,7 @@ class E2V:
 def compute_zavgS(e2v, pp, S_M):
     pp_neighs = e2v(pp)
     zavg = 0.5 * (pp_neighs[E2V(0)] + pp_neighs[E2V(1)])
+    # zavg = 0.5 * sum_reduce(E2V)(pp_neighs)
     return S_M * zavg
 
 
@@ -238,62 +240,79 @@ def test_nabla_global_index_fields():
     assert_close(-3.5455427772566003e-003, min(pnabla_MXX))
     assert_close(3.5455427772565435e-003, max(pnabla_MXX))
     assert_close(-3.3540113705465301e-003, min(pnabla_MYY))
+    assert_close(3.3540113705465301e-003, max(pnabla_MYY))
 
 
-# def nabla_from_sign_stencil(
-#     e2v, v2e, pp, S_MXX, S_MYY, vol, node_indices, pole_edges, external_sign
-# ):
-#     node_indices_of_neighbor_edge = v2e(e2v(node_indices))
-#     pole_flag_of_neighbor_edges = v2e(pole_edges)
-#     sign_acc = if_(
-#         pole_flag_of_neighbor_edges
-#         or (
-#             broadcast(node_indices, LocationType.Edge)  # ?
-#             == node_indices_of_neighbor_edge[0]
-#         ),
-#         constant_field(1.0, LocationType.Edge),
-#         constant_field(-1.0, LocationType.Edge),
-#     )
+def compute_zavgS_sign(pp, S_M):
+    pp_neighs = pp[e2v_field]
+    zavg = 0.5 * (pp_neighs[E2V(0)] + pp_neighs[E2V(1)])
+    return S_M * zavg
 
-#     # sign_acc = external_sign
-#     return make_tuple(
-#         compute_pnabla(e2v, v2e, pp, S_MXX, sign_acc, vol),
-#         compute_pnabla(e2v, v2e, pp, S_MYY, sign_acc, vol),
-#     )
+
+def sign(node_indices, is_pole_edge):
+    node_indices_of_neighbor_edge = node_indices[e2v_field[v2e_field]]
+    pole_flag_of_neighbor_edges = is_pole_edge[v2e_field]
+    sign_field = if_(
+        pole_flag_of_neighbor_edges
+        or (broadcast(V2E)(node_indices) == node_indices_of_neighbor_edge[E2V(0)]),
+        constant_field(Vertex, V2E)(1.0),
+        constant_field(Vertex, V2E)(-1.0),
+    )
+    return sign_field
+
+
+def compute_pnabla_sign(pp, S_M, node_indices, is_pole_edge, vol):
+    zavgS = compute_zavgS_sign(pp, S_M)[v2e_field]
+    pnabla_M = sum_reduce(V2E)(zavgS * sign(node_indices, is_pole_edge))
+
+    return pnabla_M / vol
+
+
+def nabla_sign(
+    pp,
+    S_MXX,
+    S_MYY,
+    node_indices,
+    is_pole_edge,
+    vol,
+):
+    return (
+        compute_pnabla_sign(pp, S_MXX, node_indices, is_pole_edge, vol),
+        compute_pnabla_sign(pp, S_MYY, node_indices, is_pole_edge, vol),
+    )
 
 
 # def test_nabla_from_sign_stencil():
-#     mesh, fs_edges, fs_nodes, edges_per_node = make_mesh()
+#     setup = nabla_setup()
 
-#     pp = make_input_field(mesh, fs_nodes, edges_per_node)
-#     S_MXX, S_MYY = make_S(mesh, fs_edges)
-#     vol = make_vol(mesh)
+#     pp = array_as_field(Vertex)(setup.input_field)
+#     S_MXX, S_MYY = tuple(map(array_as_field(Edge), setup.S_fields))
+#     vol = array_as_field(Vertex)(setup.vol_field)
 
-#     edge_flags = np.array(mesh.edges.flags())
-#     pole_edges = array_to_field(
-#         np.array([Topology.check(flag, Topology.POLE) for flag in edge_flags]),
-#         LocationType.Edge,
+#     edge_flags = np.array(setup.mesh.edges.flags())
+#     is_pole_edge = array_as_field(Edge)(
+#         np.array([Topology.check(flag, Topology.POLE) for flag in edge_flags])
 #     )
-#     index_field = array_to_field(np.array(range(fs_nodes.size)), LocationType.Vertex)
-#     external_sign = make_sign_field(mesh, fs_nodes.size, 7)
+#     node_index_field = index_field(Vertex)
 
-#     nodes_domain = list(range(fs_nodes.size))
+#     nodes_domain = list(range(setup.nodes_size))
 
-#     pnabla_MXX = np.zeros((fs_nodes.size))
-#     pnabla_MYY = np.zeros((fs_nodes.size))
+#     pnabla_MXX = np.zeros((setup.nodes_size))
+#     pnabla_MYY = np.zeros((setup.nodes_size))
+
+#     print(f"nodes: {setup.nodes_size}")
+#     print(f"edges: {setup.edges_size}")
+
 #     apply_stencil(
-#         nabla_from_sign_stencil,
-#         [nodes_domain],
+#         nabla_sign,
+#         [(nodes_domain, Vertex)],
 #         [
-#             make_connectivity_from_atlas(mesh.edges.node_connectivity),
-#             make_connectivity_from_atlas(mesh.nodes.edge_connectivity),
 #             pp,
 #             S_MXX,
 #             S_MYY,
+#             node_index_field,
+#             is_pole_edge,
 #             vol,
-#             index_field,
-#             pole_edges,
-#             external_sign,
 #         ],
 #         [pnabla_MXX, pnabla_MYY],
 #     )
@@ -302,13 +321,3 @@ def test_nabla_global_index_fields():
 #     assert_close(3.5455427772565435e-003, max(pnabla_MXX))
 #     assert_close(-3.3540113705465301e-003, min(pnabla_MYY))
 #     assert_close(3.3540113705465301e-003, max(pnabla_MYY))
-
-
-if __name__ == "__main__":
-    test_nabla()
-    # test_compute_zavgS()
-    # test_nabla_from_sign_stencil()
-    # print(
-    #     "WORK ON accessor of accessor with neihgtable, but simple standalone example to check if derefencing works correctly"
-    # )
-    # test_acc_of_acc()

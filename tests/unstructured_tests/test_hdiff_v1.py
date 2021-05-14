@@ -89,8 +89,8 @@ def hdiff_flux_x(conn, inp):
 
     neighs = conn(inp)
     return if_(
-        flux * (neighs[FP.right] - neighs[FP.center]) > constant_field(0, Vertex),
-        constant_field(0, Vertex),
+        flux * (neighs[FP.right] - neighs[FP.center]) > constant_field(Vertex)(0.0),
+        constant_field(Vertex)(0.0),
         flux,
     )
 
@@ -101,8 +101,8 @@ def hdiff_flux_y(conn, inp):
 
     neighs = conn(inp)
     return if_(
-        flux * (neighs[FP.bottom] - neighs[FP.center]) > constant_field(0, Vertex),
-        constant_field(0, Vertex),
+        flux * (neighs[FP.bottom] - neighs[FP.center]) > constant_field(Vertex)(0.0),
+        constant_field(Vertex)(0.0),
         flux,
     )
 

@@ -16,6 +16,7 @@ from numbers import Number
 
 from unstructured.utils import (
     print_axises,
+    remove_indices_of_axises,
     tupelize,
     remove_axis,
     remove_axises_from_axises,
@@ -171,11 +172,19 @@ def if_(cond, true_branch, false_branch):
     assert isinstance(true_branch, Field)
     assert isinstance(false_branch, Field)
 
-    @field_dec(true_branch.axises)
-    def _field(index):
-        return true_branch[index] if cond[index] else false_branch[index]
+    assert true_branch.axises == false_branch.axises
+    assert cond.axises == true_branch.axises
+    if true_branch.element_type is not None and false_branch.element_type is not None:
+        assert true_branch.element_type == false_branch.element_type
+        element_type = true_branch.element_type
+    else:
+        element_type = None
 
-    return _field
+    @element_access_to_field(axises=true_branch.axises, element_type=element_type)
+    def elem_acc(indices):
+        return true_branch[indices] if cond[indices] else false_branch[indices]
+
+    return elem_acc
 
 
 def reduce(op, init):
@@ -205,6 +214,19 @@ def reduce(op, init):
 
 def sum_reduce(dim):
     return reduce(operator.add, 0)(dim)
+
+
+def broadcast(*dims):
+    def _impl(field):
+        @element_access_to_field(
+            axises=field.axises + dims, element_type=field.element_type
+        )
+        def elem_access(indices):
+            return field[remove_indices_of_axises(dims, indices)]
+
+        return elem_access
+
+    return _impl
 
 
 def apply_stencil(stencil, domain, connectivities_and_in_fields, out):
