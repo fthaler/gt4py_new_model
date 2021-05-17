@@ -12,6 +12,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from unstructured.concepts import element_access_to_field
+from unstructured.utils import print_axises
 
 
 def as_1d(arr):

@@ -12,6 +12,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import operator
+import itertools
 from numbers import Number
 
 from unstructured.utils import (
@@ -117,8 +118,7 @@ class _FieldArithmetic:
                     else:
                         raise ValueError()
 
-                    if first[index] is not None:
-                        assert second_value is not None
+                    if first[index] is not None and second_value is not None:
                         return op(first[index], second_value)
                     else:
                         return None
@@ -147,24 +147,6 @@ class _FieldArithmetic:
 
 class Field(_FieldArithmetic):
     pass
-
-
-def field_dec(axises, *, element_type=None):
-    axises = tupelize(axises)
-
-    def inner_field_dec(fun):
-        class _field(Field):
-            def __init__(self):
-                self.axises = axises
-                self.element_type = element_type
-
-            def __getitem__(self, index):
-                index = tupelize(index)
-                return fun(index)
-
-        return _field()
-
-    return inner_field_dec
 
 
 def if_(cond, true_branch, false_branch):
@@ -230,11 +212,12 @@ def broadcast(*dims):
 
 
 def apply_stencil(stencil, domain, connectivities_and_in_fields, out):
-    assert len(domain) == 1  # TODO
-    indices, ind_type = domain[0]
-    for index in indices:
+    ranges, types = tuple(zip(*domain))
+
+    for indices in itertools.product(*ranges):
         fields = tupelize(stencil(*connectivities_and_in_fields))
         assert len(fields) == len(out)
+
         for o, f in zip(out, fields):
-            # TODO sparse fields
-            o[index] = f[ind_type(index)]
+            typed_indices = tuple(map(lambda i_t: i_t[1](i_t[0]), zip(indices, types)))
+            o[indices] = f[typed_indices]

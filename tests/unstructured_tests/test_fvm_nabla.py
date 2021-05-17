@@ -243,22 +243,22 @@ def test_nabla_global_index_fields():
     assert_close(3.3540113705465301e-003, max(pnabla_MYY))
 
 
-def compute_zavgS_sign(pp, S_M):
-    pp_neighs = pp[e2v_field]
-    zavg = 0.5 * (pp_neighs[E2V(0)] + pp_neighs[E2V(1)])
-    return S_M * zavg
-
-
 def sign(node_indices, is_pole_edge):
     node_indices_of_neighbor_edge = node_indices[e2v_field[v2e_field]]
     pole_flag_of_neighbor_edges = is_pole_edge[v2e_field]
     sign_field = if_(
         pole_flag_of_neighbor_edges
-        or (broadcast(V2E)(node_indices) == node_indices_of_neighbor_edge[E2V(0)]),
+        | (broadcast(V2E)(node_indices) == node_indices_of_neighbor_edge[E2V(0)]),
         constant_field(Vertex, V2E)(1.0),
         constant_field(Vertex, V2E)(-1.0),
     )
     return sign_field
+
+
+def compute_zavgS_sign(pp, S_M):
+    pp_neighs = pp[e2v_field]
+    zavg = 0.5 * (pp_neighs[E2V(0)] + pp_neighs[E2V(1)])
+    return S_M * zavg
 
 
 def compute_pnabla_sign(pp, S_M, node_indices, is_pole_edge, vol):
@@ -282,42 +282,43 @@ def nabla_sign(
     )
 
 
-# def test_nabla_from_sign_stencil():
-#     setup = nabla_setup()
+def test_nabla_from_sign_stencil():
+    setup = nabla_setup()
 
-#     pp = array_as_field(Vertex)(setup.input_field)
-#     S_MXX, S_MYY = tuple(map(array_as_field(Edge), setup.S_fields))
-#     vol = array_as_field(Vertex)(setup.vol_field)
+    pp = array_as_field(Vertex)(setup.input_field)
+    S_MXX, S_MYY = tuple(map(array_as_field(Edge), setup.S_fields))
+    vol = array_as_field(Vertex)(setup.vol_field)
 
-#     edge_flags = np.array(setup.mesh.edges.flags())
-#     is_pole_edge = array_as_field(Edge)(
-#         np.array([Topology.check(flag, Topology.POLE) for flag in edge_flags])
-#     )
-#     node_index_field = index_field(Vertex)
+    edge_flags = np.array(setup.mesh.edges.flags())
+    is_pole_edge = array_as_field(Edge)(
+        np.array([Topology.check(flag, Topology.POLE) for flag in edge_flags])
+    )
 
-#     nodes_domain = list(range(setup.nodes_size))
+    node_index_field = index_field(Vertex)
 
-#     pnabla_MXX = np.zeros((setup.nodes_size))
-#     pnabla_MYY = np.zeros((setup.nodes_size))
+    nodes_domain = list(range(setup.nodes_size))
 
-#     print(f"nodes: {setup.nodes_size}")
-#     print(f"edges: {setup.edges_size}")
+    pnabla_MXX = np.zeros((setup.nodes_size))
+    pnabla_MYY = np.zeros((setup.nodes_size))
 
-#     apply_stencil(
-#         nabla_sign,
-#         [(nodes_domain, Vertex)],
-#         [
-#             pp,
-#             S_MXX,
-#             S_MYY,
-#             node_index_field,
-#             is_pole_edge,
-#             vol,
-#         ],
-#         [pnabla_MXX, pnabla_MYY],
-#     )
+    print(f"nodes: {setup.nodes_size}")
+    print(f"edges: {setup.edges_size}")
 
-#     assert_close(-3.5455427772566003e-003, min(pnabla_MXX))
-#     assert_close(3.5455427772565435e-003, max(pnabla_MXX))
-#     assert_close(-3.3540113705465301e-003, min(pnabla_MYY))
-#     assert_close(3.3540113705465301e-003, max(pnabla_MYY))
+    apply_stencil(
+        nabla_sign,
+        [(nodes_domain, Vertex)],
+        [
+            pp,
+            S_MXX,
+            S_MYY,
+            node_index_field,
+            is_pole_edge,
+            vol,
+        ],
+        [pnabla_MXX, pnabla_MYY],
+    )
+
+    assert_close(-3.5455427772566003e-003, min(pnabla_MXX))
+    assert_close(3.5455427772565435e-003, max(pnabla_MXX))
+    assert_close(-3.3540113705465301e-003, min(pnabla_MYY))
+    assert_close(3.3540113705465301e-003, max(pnabla_MYY))
