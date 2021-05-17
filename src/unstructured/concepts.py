@@ -96,7 +96,7 @@ class _FieldArithmetic:
         "__eq__",
         "__ne__",
     ]
-    SUPPORTED_REVERSE_OPS = ["__rmul__"]
+    SUPPORTED_REVERSE_OPS = ["__rmul__", "__radd__"]
 
     @staticmethod
     def _field_op(op):
