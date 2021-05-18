@@ -11,8 +11,10 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+from typing import Sequence
+from numpy import ndarray
 from unstructured.concepts import element_access_to_field
-from unstructured.utils import print_axises
+from unstructured.utils import print_axises, split_indices
 
 
 def as_1d(arr):
@@ -21,6 +23,25 @@ def as_1d(arr):
 
 def as_2d(arr, shape):
     return arr.reshape(*shape)
+
+
+def field_sequence_as_field(dim):
+    def _fun(seq):
+        # TODO assert all elements have same axises
+        @element_access_to_field(
+            axises=(dim,) + seq[0].axises,
+            element_type=seq[0].element_type,
+            tuple_size=seq[0].tuple_size,
+        )
+        def elem_acc(indices):
+            current_dim, rest = split_indices(indices, (dim,))
+            assert len(current_dim) == 1
+            current_dim = current_dim[0]
+            return seq[current_dim][rest]
+
+        return elem_acc
+
+    return _fun
 
 
 def array_as_field(*dims, element_type=None, tuple_size=None):

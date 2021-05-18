@@ -43,6 +43,15 @@ def axis(*, length=None, aliases=None):
     return _impl
 
 
+def axises_eq(first, second):
+    lst = list(second)
+    for axis in first:
+        if axis not in lst:
+            return False
+        lst.remove(axis)
+    return True
+
+
 def tupelize(tup):
     if isinstance(tup, tuple):
         return tup

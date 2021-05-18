@@ -17,6 +17,7 @@ from numbers import Number
 
 from unstructured.utils import (
     axis,
+    axises_eq,
     print_axises,
     remove_indices_of_axises,
     tupelize,
@@ -137,7 +138,9 @@ class _FieldArithmetic:
     def _field_op(op):
         def fun(first, second):
             if isinstance(second, Field):
-                assert first.axises == second.axises  # TODO order independant
+                assert axises_eq(
+                    first.axises, second.axises
+                ), f"first=[{[str(i(0)) for i in first.axises]}, second={[str(i(0)) for i in second.axises]}"  # TODO order independant
                 if first.element_type is not None and second.element_type is not None:
                     assert first.element_type == second.element_type
 
