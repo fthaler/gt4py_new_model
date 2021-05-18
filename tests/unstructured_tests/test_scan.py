@@ -1,5 +1,8 @@
-from unstructured.concepts import element_access_to_field
-from unstructured.utils import axis, get_index_of_type, split_indices
+from unstructured.concepts import TupleDim__, element_access_to_field
+from unstructured.utils import (
+    axis,
+    split_indices,
+)
 import numpy as np
 from unstructured.helpers import array_as_field
 
@@ -15,7 +18,9 @@ class I:
 
 
 def k_sum_explicit(inp):
-    @element_access_to_field(axises=inp.axises, element_type=inp.element_type)
+    @element_access_to_field(
+        axises=inp.axises, element_type=inp.element_type, tuple_size=None
+    )
     def elem_acc(indices):
         state = 0
         k_index, rest = split_indices(indices, (K,))
@@ -49,7 +54,9 @@ def k_sum(state, inp):  # both state and inp are k slices
 
 
 def k_sum_scanner(inp):
-    @element_access_to_field(axises=inp.axises, element_type=inp.element_type)
+    @element_access_to_field(
+        axises=inp.axises, element_type=inp.element_type, tuple_size=None
+    )
     def elem_acc(indices):
         k_index, rest = split_indices(indices, (K,))
         assert len(k_index) == 1
@@ -78,19 +85,39 @@ test_scan()
 def generic_scan(axis, fun):
     def scanner(*inps):
         # TODO assert all inp have the same axises
-        @element_access_to_field(
-            axises=inps[0].axises, element_type=inps[0].element_type
+        axises = inps[0].axises
+
+        def make_elem_access(tuple_size):
+            new_axises = axises if tuple_size is None else axises + (TupleDim__,)
+
+            @element_access_to_field(
+                axises=new_axises,
+                element_type=inps[0].element_type,
+                tuple_size=tuple_size,
+            )
+            def elem_acc(indices):
+                scan_index, rest = split_indices(indices, (axis,))
+                assert len(scan_index) == 1
+
+                state = None
+                for ind in map(lambda i: axis(i), range(scan_index[0])):
+                    state = fun(state, *tuple(inp[ind] for inp in inps))
+
+                if tuple_size is None:
+                    return state[rest]
+                else:
+                    tuple_index, rest = split_indices(rest, (TupleDim__,))
+                    assert len(tuple_index) == 1
+                    tuple_index = tuple_index[0]
+                    return state[tuple_index.__index__()][rest]
+
+            return elem_acc
+
+        # try what the result of fun is (tuple or value):
+        res_check = fun(None, *tuple(inp[axis(0)] for inp in inps))
+        return make_elem_access(
+            None if not isinstance(res_check, tuple) else len(res_check)
         )
-        def elem_acc(indices):
-            scan_index, rest = split_indices(indices, (axis,))
-            assert len(scan_index) == 1
-
-            state = None
-            for ind in map(lambda i: axis(i), range(scan_index[0])):
-                state = fun(state, *tuple(inp[ind] for inp in inps))
-            return state[rest]
-
-        return elem_acc
 
     return scanner
 
@@ -157,4 +184,33 @@ def test_2out():
     assert out2[K(2), I(1)] == 33
 
 
-test_2inp()
+test_2out()
+
+
+def scan_pass(axis):
+    def impl(fun):
+        return generic_scan(axis, fun)
+
+    return impl
+
+
+@scan_pass(K)
+def decorated_k_sum(state, inp):  # both state and inp are fields without k dimension
+    if state is None:
+        res = inp
+    else:
+        res = state + inp
+    return res
+
+
+def test_decorated():
+    field = array_as_field(I, K)(np.array([[1, 2, 3, 4, 5], [6, 7, 8, 9, 10]]))
+
+    out = decorated_k_sum(field)
+
+    assert out[K(1), I(0)] == 1
+    assert out[K(4), I(0)] == 10
+    assert out[K(1), I(1)] == 6
+
+
+test_decorated()

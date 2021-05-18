@@ -23,7 +23,7 @@ def as_2d(arr, shape):
     return arr.reshape(*shape)
 
 
-def array_as_field(*dims, element_type=None):
+def array_as_field(*dims, element_type=None, tuple_size=None):
     def _fun(np_arr):
         assert np_arr.ndim == len(dims)
         for i in range(len(dims)):
@@ -32,7 +32,9 @@ def array_as_field(*dims, element_type=None):
                     len(dims[i](0)) == np_arr.shape[i]
                 )  # TODO dim[i](0) assumes I can construct the index 0
 
-        @element_access_to_field(axises=dims, element_type=element_type)
+        @element_access_to_field(
+            axises=dims, element_type=element_type, tuple_size=tuple_size
+        )
         def element_access(indices):
             def _order_indices(indices):
                 lst = []
@@ -52,7 +54,7 @@ def array_as_field(*dims, element_type=None):
 
 def constant_field(*dims):
     def _impl(c):
-        @element_access_to_field(axises=dims, element_type=type(c))
+        @element_access_to_field(axises=dims, element_type=type(c), tuple_size=None)
         def _field(_):
             return c
 
@@ -62,7 +64,7 @@ def constant_field(*dims):
 
 
 def index_field(loc):
-    @element_access_to_field(axises=(loc,), element_type=int)
+    @element_access_to_field(axises=(loc,), element_type=int, tuple_size=None)
     def fun(index):
         assert len(index) == 1
         return index[0].__index__()

@@ -19,7 +19,9 @@ from atlas4py import IrregularConnectivity
 def make_sparse_index_field_from_atlas_connectivity(
     atlas_connectivity, primary_loc, neigh_loc, field_loc
 ):
-    @element_access_to_field(axises=(primary_loc, neigh_loc), element_type=field_loc)
+    @element_access_to_field(
+        axises=(primary_loc, neigh_loc), element_type=field_loc, tuple_size=None
+    )
     def element_access(indices):
         primary_index = get_index_of_type(primary_loc)(indices)
         neigh_index = get_index_of_type(neigh_loc)(indices)

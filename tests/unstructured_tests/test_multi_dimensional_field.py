@@ -2,7 +2,7 @@ import pytest
 import operator
 import numpy as np
 
-from unstructured.concepts import sum_reduce
+from unstructured.concepts import sum_reduce, TupleDim__
 from unstructured.utils import axis
 from unstructured.helpers import array_as_field
 
@@ -145,3 +145,15 @@ def test_reduce():
 
 
 test_reduce()
+
+
+def test_tuple_dim():
+    my_field = array_as_field(TupleDim__, GridDim, tuple_size=2)(
+        np.array([[1, 2, 3, 4], [5, 6, 7, 8]])
+    )
+    field1, field2 = my_field
+    assert field1[GridDim(0)] == 1
+    assert field2[GridDim(0)] == 5
+
+
+test_tuple_dim()
