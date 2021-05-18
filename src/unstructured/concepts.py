@@ -14,11 +14,14 @@
 import operator
 import itertools
 from numbers import Number
+import numpy as np
 
 from unstructured.utils import (
     axis,
     axises_eq,
+    dimensions_eq,
     print_axises,
+    remove_axises_from_dimensions,
     remove_indices_of_axises,
     tupelize,
     remove_axis,
@@ -35,15 +38,21 @@ class TupleDim__:
 
 
 # tuple size is hacked on top...
-def make_field(element_access, bind_indices, axises, element_type, *, tuple_size=None):
-    axises = tupelize(axises)
+def make_field(
+    element_access, bind_indices, dimensions, element_type, *, tuple_size=None
+):
+    dimensions = tupelize(dimensions)
 
     class _field(Field):
         def __init__(self):
             self.element_type = element_type
-            self.axises = remove_axises_from_axises(
-                (type(i) for i in bind_indices), axises
+            self.dimensions = remove_axises_from_dimensions(
+                (type(i) for i in bind_indices), dimensions
             )
+            # self.axises = remove_axises_from_axises(
+            #     (type(i) for i in bind_indices), axises
+            # )
+            # self.axises =
             self.tuple_size = tuple_size
 
         def __getitem__(self, indices):
@@ -52,43 +61,43 @@ def make_field(element_access, bind_indices, axises, element_type, *, tuple_size
 
             else:
                 indices = tupelize(indices)
-                if len(indices) == len(self.axises):
+                if len(indices) == len(self.dimensions):
                     return element_access(bind_indices + indices)
                 else:
                     # field with `indices` bound
                     return make_field(
-                        element_access, indices, self.axises, element_type
+                        element_access, indices, self.dimensions, element_type
                     )
 
-        def __iter__(self):
-            assert TupleDim__ in self.axises
-            assert self.tuple_size is not None
+        # def __iter__(self):
+        #     assert TupleDim__ in self.axises
+        #     assert self.tuple_size is not None
 
-            def make_tuple_acc(i):
-                @element_access_to_field(
-                    axises=remove_axis(TupleDim__, self.axises),
-                    element_type=self.element_type,
-                    tuple_size=0,
-                )
-                def tuple_acc(indices):
-                    return self[TupleDim__(i)][indices]
+        #     def make_tuple_acc(i):
+        #         @element_access_to_field(
+        #             axises=remove_axis(TupleDim__, self.axises),
+        #             element_type=self.element_type,
+        #             tuple_size=0,
+        #         )
+        #         def tuple_acc(indices):
+        #             return self[TupleDim__(i)][indices]
 
-                return tuple_acc
+        #         return tuple_acc
 
-            return iter(
-                map(
-                    lambda i: make_tuple_acc(i),
-                    range(self.tuple_size),
-                )
-            )
+        #     return iter(
+        #         map(
+        #             lambda i: make_tuple_acc(i),
+        #             range(self.tuple_size),
+        #         )
+        #     )
 
     return _field()
 
 
-def element_access_to_field(*, axises, element_type, tuple_size):
+def element_access_to_field(*, dimensions, element_type, tuple_size):
     def _fun(element_access):
         return make_field(
-            element_access, tuple(), axises, element_type, tuple_size=tuple_size
+            element_access, tuple(), dimensions, element_type, tuple_size=tuple_size
         )
 
     return _fun
@@ -98,18 +107,21 @@ def field_getitem(field, index_field):
     assert index_field.element_type is not None
     if index_field.element_type is None:
         raise TypeError("Is not an index field, missing element type.")
-    if not index_field.element_type in field.axises:
+    if not index_field.element_type in [dim.axis for dim in field.dimensions]:
         raise TypeError("Incompatible index field passed.")
 
     @element_access_to_field(
-        axises=(
-            remove_axis(index_field.element_type, field.axises) + index_field.axises
+        dimensions=(
+            remove_axises_from_dimensions((index_field.element_type,), field.dimensions)
+            + index_field.dimensions
         ),
         element_type=field.element_type,
         tuple_size=field.tuple_size,
     )
     def element_access(indices):
-        index_field_indices, rest = split_indices(indices, index_field.axises)
+        index_field_indices, rest = split_indices(
+            indices, tuple(dim.axis for dim in index_field.dimensions)
+        )
         new_index = index_field[index_field_indices]
         if new_index is not None:
             return field[(new_index,) + rest]
@@ -138,14 +150,15 @@ class _FieldArithmetic:
     def _field_op(op):
         def fun(first, second):
             if isinstance(second, Field):
-                assert axises_eq(
-                    first.axises, second.axises
-                ), f"first=[{[str(i(0)) for i in first.axises]}, second={[str(i(0)) for i in second.axises]}"  # TODO order independant
+                # assert axises_eq(
+                #     first.axises, second.axises
+                # ), f"first=[{[str(i(0)) for i in first.axises]}, second={[str(i(0)) for i in second.axises]}"  # TODO order independant
+                assert dimensions_eq(first.dimensions, second.dimensions)
                 if first.element_type is not None and second.element_type is not None:
                     assert first.element_type == second.element_type
 
             class _field(Field):
-                axises = first.axises
+                dimensions = first.dimensions
                 element_type = first.element_type
                 tuple_size = first.tuple_size
 
@@ -185,7 +198,21 @@ class _FieldArithmetic:
 
 
 class Field(_FieldArithmetic):
-    pass
+    def __array__(self, dtype=None):
+        # TODO dtype
+        ranges = [dim.range for dim in self.dimensions]
+        types = [dim.axis for dim in self.dimensions]
+        shape = [len(dim.range) for dim in self.dimensions]
+
+        # TODO support ranges that don't start from zero
+        assert all((r.start == 0 for r in ranges))
+
+        res = np.zeros(shape)
+        for indices in itertools.product(*ranges):
+            typed_indices = tuple(map(lambda i_t: i_t[1](i_t[0]), zip(indices, types)))
+            res[indices] = self[typed_indices]
+
+        return res
 
 
 def if_(cond, true_branch, false_branch):
@@ -222,7 +249,7 @@ def reduce(op, init):
 
         def _reduce(field):
             @element_access_to_field(
-                axises=remove_axis(dim, field.axises),
+                dimensions=remove_axises_from_dimensions((dim,), field.dimensions),
                 element_type=field.element_type,
                 tuple_size=field.tuple_size,
             )

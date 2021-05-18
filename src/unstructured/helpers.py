@@ -12,9 +12,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from typing import Sequence
-from numpy import ndarray
+from numpy import array, ndarray
 from unstructured.concepts import element_access_to_field
-from unstructured.utils import print_axises, split_indices
+from unstructured.utils import make_dimensions, print_axises, split_indices
+import numpy as np
 
 
 def as_1d(arr):
@@ -44,33 +45,39 @@ def field_sequence_as_field(dim):
     return _fun
 
 
-def array_as_field(*dims, element_type=None, tuple_size=None):
+def array_as_field(*axises, element_type=None, tuple_size=None):
     def _fun(np_arr):
-        assert np_arr.ndim == len(dims)
-        for i in range(len(dims)):
-            if hasattr(dims[i], "__len__"):
+        assert np_arr.ndim == len(axises)
+        for i in range(len(axises)):
+            if hasattr(axises[i], "__len__"):
                 assert (
-                    len(dims[i](0)) == np_arr.shape[i]
+                    len(axises[i](0)) == np_arr.shape[i]
                 )  # TODO dim[i](0) assumes I can construct the index 0
 
         @element_access_to_field(
-            axises=dims, element_type=element_type, tuple_size=tuple_size
+            dimensions=make_dimensions(axises, tuple(range(i) for i in np_arr.shape)),
+            element_type=element_type,
+            tuple_size=tuple_size,
         )
         def element_access(indices):
             def _order_indices(indices):
                 lst = []
                 types = tuple((type(ind) for ind in indices))
-                for axis in dims:
+                for axis in axises:
                     lst.append(indices[types.index(axis)].__index__())
                 return tuple(lst)
 
-            assert len(indices) == len(dims)
+            assert len(indices) == len(axises)
             element = np_arr[_order_indices(indices)]
             return element_type(element) if element_type is not None else element
 
         return element_access
 
     return _fun
+
+
+def materialize(field):
+    return array_as_field(*(dim.axis for dim in field.dimensions))(np.asarray(field))
 
 
 def constant_field(*dims):

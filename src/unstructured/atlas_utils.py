@@ -11,7 +11,7 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from unstructured.utils import get_index_of_type
+from unstructured.utils import Dimension, get_index_of_type
 from unstructured.concepts import element_access_to_field
 from atlas4py import IrregularConnectivity
 
@@ -19,8 +19,23 @@ from atlas4py import IrregularConnectivity
 def make_sparse_index_field_from_atlas_connectivity(
     atlas_connectivity, primary_loc, neigh_loc, field_loc
 ):
+    if isinstance(atlas_connectivity, IrregularConnectivity):
+        primary_loc_size = range(atlas_connectivity.rows)
+        print(max([(atlas_connectivity.cols(i)) for i in primary_loc_size]))
+        neigh_loc_size = range(
+            max([(atlas_connectivity.cols(i)) for i in primary_loc_size])
+        )
+    else:
+        primary_loc_size = range(16167)  # TODO atlas_connectivity.rows()
+        neigh_loc_size = range(2)  # TODO atlas_connectivity.cols()
+
     @element_access_to_field(
-        axises=(primary_loc, neigh_loc), element_type=field_loc, tuple_size=None
+        dimensions=(
+            Dimension(primary_loc, primary_loc_size),
+            Dimension(neigh_loc, neigh_loc_size),
+        ),
+        element_type=field_loc,
+        tuple_size=None,
     )
     def element_access(indices):
         primary_index = get_index_of_type(primary_loc)(indices)

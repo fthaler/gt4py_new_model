@@ -43,12 +43,37 @@ def axis(*, length=None, aliases=None):
     return _impl
 
 
+class Dimension:
+    def __init__(self, axis, range):
+        self.axis = axis
+        self.range = range  # range or set of indices
+
+    def __eq__(self, other):
+        if self.axis == other.axis and self.range == other.range:
+            return True
+        return False
+
+
+def make_dimensions(axises, ranges):
+    assert len(axises) == len(ranges)
+    return tuple(Dimension(a, s) for a, s in zip(axises, ranges))
+
+
 def axises_eq(first, second):
     lst = list(second)
     for axis in first:
         if axis not in lst:
             return False
         lst.remove(axis)
+    return True
+
+
+def dimensions_eq(first, second):
+    lst = list(second)
+    for dim in first:
+        if dim not in lst:
+            return False
+        lst.remove(dim)
     return True
 
 
@@ -69,6 +94,19 @@ def remove_axises_from_axises(to_remove, axises):
     for axis in to_remove:
         res = remove_axis(axis, res)
     return res
+
+
+def remove_axises_from_dimensions(to_remove, dimensions):
+    res = []
+    to_remove = list(to_remove)
+    for dim in dimensions:
+        if dim.axis in to_remove:
+            to_remove.remove(dim.axis)
+        else:
+            res.append(dim)
+    assert len(to_remove) == 0
+
+    return tuple(res)
 
 
 def remove_indices_of_axises(axises, indices):

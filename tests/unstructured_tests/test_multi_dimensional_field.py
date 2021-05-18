@@ -138,8 +138,8 @@ def test_reduce():
     my_field = array_as_field(GridDim, Vec2Dim)(grid_vec2)
 
     reduced_field = sum_reduce(Vec2Dim)(my_field)
-    for axis in reduced_field.axises:
-        print(str(axis(0)))
+    for dim in reduced_field.dimensions:
+        print(str(dim.axis(0)))
 
     print(reduced_field[GridDim(2)])
 
