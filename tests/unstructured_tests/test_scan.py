@@ -1,4 +1,9 @@
-from unstructured.concepts import TupleDim__, element_access_to_field
+from unstructured.concepts import (
+    backward_scan,
+    element_access_to_field,
+    generic_scan,
+    scan_pass,
+)
 from unstructured.utils import (
     axis,
     split_indices,
@@ -82,53 +87,6 @@ def test_scan():
 test_scan()
 
 
-def generic_scan(axis, fun, *, backward):
-    def scanner(*inps):
-        # TODO assert all inp have the same axises
-        axises = inps[0].axises
-
-        def make_elem_access(tuple_size):
-            new_axises = axises if tuple_size is None else axises + (TupleDim__,)
-
-            @element_access_to_field(
-                axises=new_axises,
-                element_type=inps[0].element_type,
-                tuple_size=tuple_size,
-            )
-            def elem_acc(indices):
-                scan_index, rest = split_indices(indices, (axis,))
-                assert len(scan_index) == 1
-
-                state = None
-
-                if not backward:
-                    iter = list(range(scan_index[0].__index__() + 1))
-                else:
-                    iter = list(range(scan_index[0], len(axis(0))))
-                    iter.reverse()
-                    print(iter)
-                for ind in map(lambda i: axis(i), iter):
-                    state = fun(state, *tuple(inp[ind] for inp in inps))
-
-                if tuple_size is None:
-                    return state[rest]
-                else:
-                    tuple_index, rest = split_indices(rest, (TupleDim__,))
-                    assert len(tuple_index) == 1
-                    tuple_index = tuple_index[0]
-                    return state[tuple_index.__index__()][rest]
-
-            return elem_acc
-
-        # try what the result of fun is (tuple or value):
-        res_check = fun(None, *tuple(inp[axis(0)] for inp in inps))
-        return make_elem_access(
-            None if not isinstance(res_check, tuple) else len(res_check)
-        )
-
-    return scanner
-
-
 def test_generic_scan():
     field = array_as_field(I, K)(np.array([[1, 2, 3, 4, 5], [6, 7, 8, 9, 10]]))
 
@@ -194,13 +152,6 @@ def test_2out():
 test_2out()
 
 
-def scan_pass(axis, *, backward=False):
-    def impl(fun):
-        return generic_scan(axis, fun, backward=backward)
-
-    return impl
-
-
 @scan_pass(K)
 def decorated_k_sum(state, inp):  # both state and inp are fields without k dimension
     if state is None:
@@ -223,7 +174,7 @@ def test_decorated():
 test_decorated()
 
 
-@scan_pass(K, backward=True)
+@backward_scan(K)
 def backward_k_sum(state, inp):
     if state is None:
         res = inp
@@ -237,9 +188,20 @@ def test_backward():
 
     out = backward_k_sum(field)
 
-    assert out[K(1), I(0)] == 14  # TODO is that correct?
+    assert out[K(1), I(0)] == 14
     assert out[K(4), I(0)] == 5
     assert out[K(1), I(1)] == 34
 
 
 test_backward()
+
+
+def test_forward_backward():
+    field = array_as_field(I, K)(np.array([[1, 2, 3, 4, 5], [6, 7, 8, 9, 10]]))
+    # forward result: [1,3,6,10,15], [6,13,21,30,40]
+
+    out = backward_k_sum(decorated_k_sum(field))
+
+    assert out[K(1), I(0)] == 34
+    assert out[K(4), I(0)] == 15
+    assert out[K(1), I(1)] == 104
