@@ -82,7 +82,7 @@ def test_scan():
 test_scan()
 
 
-def generic_scan(axis, fun):
+def generic_scan(axis, fun, *, backward):
     def scanner(*inps):
         # TODO assert all inp have the same axises
         axises = inps[0].axises
@@ -100,7 +100,14 @@ def generic_scan(axis, fun):
                 assert len(scan_index) == 1
 
                 state = None
-                for ind in map(lambda i: axis(i), range(scan_index[0])):
+
+                if not backward:
+                    iter = list(range(scan_index[0].__index__() + 1))
+                else:
+                    iter = list(range(scan_index[0], len(axis(0))))
+                    iter.reverse()
+                    print(iter)
+                for ind in map(lambda i: axis(i), iter):
                     state = fun(state, *tuple(inp[ind] for inp in inps))
 
                 if tuple_size is None:
@@ -125,11 +132,11 @@ def generic_scan(axis, fun):
 def test_generic_scan():
     field = array_as_field(I, K)(np.array([[1, 2, 3, 4, 5], [6, 7, 8, 9, 10]]))
 
-    out = generic_scan(K, k_sum)(field)
+    out = generic_scan(K, k_sum, backward=False)(field)
 
-    assert out[K(1), I(0)] == 1
-    assert out[K(4), I(0)] == 10
-    assert out[K(1), I(1)] == 6
+    assert out[K(1), I(0)] == 3
+    assert out[K(4), I(0)] == 15
+    assert out[K(1), I(1)] == 13
 
 
 test_generic_scan()
@@ -146,11 +153,11 @@ def k_sum_2inp(state, inp1, inp2):
 def test_2inp():
     field = array_as_field(I, K)(np.array([[1, 2, 3, 4, 5], [6, 7, 8, 9, 10]]))
 
-    out = generic_scan(K, k_sum_2inp)(field, field)
+    out = generic_scan(K, k_sum_2inp, backward=False)(field, field)
 
-    assert out[K(1), I(0)] == 2
-    assert out[K(4), I(0)] == 20
-    assert out[K(1), I(1)] == 12
+    assert out[K(1), I(0)] == 6
+    assert out[K(4), I(0)] == 30
+    assert out[K(1), I(1)] == 26
 
 
 test_2inp()
@@ -173,23 +180,23 @@ def test_2out():
         np.array([[11, 12, 13, 14, 15], [16, 17, 18, 19, 20]])
     )
 
-    out1, out2 = generic_scan(K, k_sum_2inp_2out)(field1, field2)
+    out1, out2 = generic_scan(K, k_sum_2inp_2out, backward=False)(field1, field2)
 
-    assert out1[K(1), I(0)] == 1
-    assert out1[K(4), I(0)] == 10
-    assert out1[K(1), I(1)] == 6
+    assert out1[K(1), I(0)] == 3
+    assert out1[K(4), I(0)] == 15
+    assert out1[K(1), I(1)] == 13
 
-    assert out2[K(1), I(0)] == 11
-    assert out2[K(2), I(0)] == 23
-    assert out2[K(2), I(1)] == 33
+    assert out2[K(1), I(0)] == 23
+    assert out2[K(2), I(0)] == 36
+    assert out2[K(2), I(1)] == 51
 
 
 test_2out()
 
 
-def scan_pass(axis):
+def scan_pass(axis, *, backward=False):
     def impl(fun):
-        return generic_scan(axis, fun)
+        return generic_scan(axis, fun, backward=backward)
 
     return impl
 
@@ -208,9 +215,31 @@ def test_decorated():
 
     out = decorated_k_sum(field)
 
-    assert out[K(1), I(0)] == 1
-    assert out[K(4), I(0)] == 10
-    assert out[K(1), I(1)] == 6
+    assert out[K(1), I(0)] == 3
+    assert out[K(4), I(0)] == 15
+    assert out[K(1), I(1)] == 13
 
 
 test_decorated()
+
+
+@scan_pass(K, backward=True)
+def backward_k_sum(state, inp):
+    if state is None:
+        res = inp
+    else:
+        res = state + inp
+    return res
+
+
+def test_backward():
+    field = array_as_field(I, K)(np.array([[1, 2, 3, 4, 5], [6, 7, 8, 9, 10]]))
+
+    out = backward_k_sum(field)
+
+    assert out[K(1), I(0)] == 14  # TODO is that correct?
+    assert out[K(4), I(0)] == 5
+    assert out[K(1), I(1)] == 34
+
+
+test_backward()
