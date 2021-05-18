@@ -62,14 +62,21 @@ def make_field(element_access, bind_indices, axises, element_type, *, tuple_size
         def __iter__(self):
             assert TupleDim__ in self.axises
             assert self.tuple_size is not None
+
+            def make_tuple_acc(i):
+                @element_access_to_field(
+                    axises=remove_axis(TupleDim__, self.axises),
+                    element_type=self.element_type,
+                    tuple_size=0,
+                )
+                def tuple_acc(indices):
+                    return self[TupleDim__(i)][indices]
+
+                return tuple_acc
+
             return iter(
                 map(
-                    lambda i: make_field(
-                        element_access,
-                        bind_indices + (TupleDim__(i),),
-                        self.axises,
-                        element_type,
-                    ),
+                    lambda i: make_tuple_acc(i),
                     range(self.tuple_size),
                 )
             )
@@ -261,3 +268,66 @@ def apply_stencil(stencil, domain, connectivities_and_in_fields, out):
         for o, f in zip(out, fields):
             typed_indices = tuple(map(lambda i_t: i_t[1](i_t[0]), zip(indices, types)))
             o[indices] = f[typed_indices]
+
+
+def generic_scan(axis, fun, *, backward):
+    def scanner(*inps):
+        # TODO assert all inp have the same axises
+        axises = inps[0].axises
+
+        def make_elem_access(tuple_size):
+            new_axises = axises if tuple_size is None else axises + (TupleDim__,)
+
+            @element_access_to_field(
+                axises=new_axises,
+                element_type=inps[0].element_type,
+                tuple_size=tuple_size,
+            )
+            def elem_acc(indices):
+                tmp_axises = new_axises
+                scan_index, rest = split_indices(indices, (axis,))
+                assert len(scan_index) == 1
+
+                state = None
+
+                if not backward:
+                    iter = list(range(scan_index[0].__index__() + 1))
+                else:
+                    iter = list(range(scan_index[0], len(axis(0))))
+                    iter.reverse()
+                    print(iter)
+                for ind in map(lambda i: axis(i), iter):
+                    state = fun(state, *tuple(inp[ind] for inp in inps))
+
+                if tuple_size is None:
+                    return state[rest]
+                else:
+                    tuple_index, rest = split_indices(rest, (TupleDim__,))
+                    assert len(tuple_index) == 1
+                    tuple_index = tuple_index[0]
+                    return state[tuple_index.__index__()][rest]
+
+            return elem_acc
+
+        # try what the result of fun is (tuple or value):
+        res_check = fun(None, *tuple(inp[axis(0)] for inp in inps))
+        return make_elem_access(
+            None if not isinstance(res_check, tuple) else len(res_check)
+        )
+
+    return scanner
+
+
+def scan_pass(axis, *, backward=False):
+    def impl(fun):
+        return generic_scan(axis, fun, backward=backward)
+
+    return impl
+
+
+def forward_scan(axis):
+    return scan_pass(axis, backward=False)
+
+
+def backward_scan(axis):
+    return scan_pass(axis, backward=True)

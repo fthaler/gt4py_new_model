@@ -1,11 +1,14 @@
 from unstructured.concepts import (
+    TupleDim__,
     backward_scan,
     element_access_to_field,
+    forward_scan,
     generic_scan,
     scan_pass,
 )
 from unstructured.utils import (
     axis,
+    print_axises,
     split_indices,
 )
 import numpy as np
@@ -47,9 +50,6 @@ def test_explicit_scan():
     assert out[K(1), I(1)] == 6
 
 
-test_explicit_scan()
-
-
 def k_sum(state, inp):  # both state and inp are k slices
     if state is None:
         res = inp
@@ -84,9 +84,6 @@ def test_scan():
     assert out[K(1), I(1)] == 6
 
 
-test_scan()
-
-
 def test_generic_scan():
     field = array_as_field(I, K)(np.array([[1, 2, 3, 4, 5], [6, 7, 8, 9, 10]]))
 
@@ -95,9 +92,6 @@ def test_generic_scan():
     assert out[K(1), I(0)] == 3
     assert out[K(4), I(0)] == 15
     assert out[K(1), I(1)] == 13
-
-
-test_generic_scan()
 
 
 def k_sum_2inp(state, inp1, inp2):
@@ -116,9 +110,6 @@ def test_2inp():
     assert out[K(1), I(0)] == 6
     assert out[K(4), I(0)] == 30
     assert out[K(1), I(1)] == 26
-
-
-test_2inp()
 
 
 def k_sum_2inp_2out(state, inp1, inp2):
@@ -149,9 +140,6 @@ def test_2out():
     assert out2[K(2), I(1)] == 51
 
 
-test_2out()
-
-
 @scan_pass(K)
 def decorated_k_sum(state, inp):  # both state and inp are fields without k dimension
     if state is None:
@@ -169,9 +157,6 @@ def test_decorated():
     assert out[K(1), I(0)] == 3
     assert out[K(4), I(0)] == 15
     assert out[K(1), I(1)] == 13
-
-
-test_decorated()
 
 
 @backward_scan(K)
@@ -193,9 +178,6 @@ def test_backward():
     assert out[K(1), I(1)] == 34
 
 
-test_backward()
-
-
 def test_forward_backward():
     field = array_as_field(I, K)(np.array([[1, 2, 3, 4, 5], [6, 7, 8, 9, 10]]))
     # forward result: [1,3,6,10,15], [6,13,21,30,40]
@@ -205,3 +187,58 @@ def test_forward_backward():
     assert out[K(1), I(0)] == 34
     assert out[K(4), I(0)] == 15
     assert out[K(1), I(1)] == 104
+
+
+def make_field_tuple(*fields):
+    # TODO assert all have same axis
+    @element_access_to_field(
+        axises=fields[0].axises + (TupleDim__,),
+        element_type=fields[0].element_type,
+        tuple_size=len(fields),
+    )
+    def elem_acc(indices):
+        tuple_index, rest = split_indices(indices, (TupleDim__,))
+        assert len(tuple_index) == 1
+        return fields[tuple_index[0]][rest]
+
+    return elem_acc
+
+
+def test_make_tuple():
+    field1 = array_as_field(I, K)(np.array([[1, 1, 1, 1, 1], [2, 2, 2, 2, 2]]))
+    field2 = array_as_field(I, K)(np.array([[3, 3, 3, 3, 3], [4, 4, 4, 4, 4]]))
+
+    tup = make_field_tuple(field1, field2)
+
+    unpacked1, unpacked2 = tup
+
+    assert unpacked1[I(1), K(3)] == field1[I(1), K(3)]
+
+
+@forward_scan(K)
+def tup_forward(state, in1, in2):
+    if state is None:
+        return in1, in2
+    else:
+        s1, s2 = state
+        return s1 + in1, s2 + in2
+
+
+@backward_scan(K)
+def backward_sum_tup(state, in1, in2):
+    if state is None:
+        return in1 + in2
+    else:
+        return state + in1 + in2
+
+
+def test_tup_forward_backward():
+    field1 = array_as_field(I, K)(np.array([[1, 1, 1, 1, 1], [2, 2, 2, 2, 2]]))
+    field2 = array_as_field(I, K)(np.array([[3, 3, 3, 3, 3], [4, 4, 4, 4, 4]]))
+
+    out1, out2 = tup_forward(field1, field2)
+    assert out1[K(1), I(0)] == 2
+    assert out2[K(1), I(0)] == 6
+
+    out = backward_sum_tup(*tup_forward(field1, field2))
+    assert out[K(4), I(0)] == 20
