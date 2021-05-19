@@ -65,7 +65,6 @@ def array_as_field(*axises, element_type=None, tuple_size=None):
                     lst.append(indices[types.index(axis)].__index__())
                 return tuple(lst)
 
-            assert len(indices) == len(axises)
             element = np_arr[_order_indices(indices)]
             return element_type(element) if element_type is not None else element
 
@@ -75,7 +74,9 @@ def array_as_field(*axises, element_type=None, tuple_size=None):
 
 
 def materialize(field):
-    return array_as_field(*(dim.axis for dim in field.dimensions))(np.asarray(field))
+    return array_as_field(
+        *(dim.axis for dim in field.dimensions), element_type=field.element_type
+    )(np.asarray(field))
 
 
 def constant_field(*axises):
