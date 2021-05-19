@@ -103,3 +103,7 @@ def index_field(loc, range=None):
         return index[0].__index__()
 
     return fun
+
+
+def print_dims(field):
+    print([f"axis={str(dim.axis(0))},{dim.range}," for dim in field.dimensions])

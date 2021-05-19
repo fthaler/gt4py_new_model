@@ -68,27 +68,29 @@ def make_field(
                         element_access, indices, self.dimensions, element_type
                     )
 
-        # def __iter__(self):
-        #     assert TupleDim__ in self.axises
-        #     assert self.tuple_size is not None
+        def __iter__(self):
+            assert TupleDim__ in (dim.axis for dim in self.dimensions)
+            assert self.tuple_size is not None
 
-        #     def make_tuple_acc(i):
-        #         @element_access_to_field(
-        #             axises=remove_axis(TupleDim__, self.axises),
-        #             element_type=self.element_type,
-        #             tuple_size=0,
-        #         )
-        #         def tuple_acc(indices):
-        #             return self[TupleDim__(i)][indices]
+            def make_tuple_acc(i):
+                @element_access_to_field(
+                    dimensions=remove_axises_from_dimensions(
+                        (TupleDim__,), self.dimensions
+                    ),
+                    element_type=self.element_type,
+                    tuple_size=0,
+                )
+                def tuple_acc(indices):
+                    return self[TupleDim__(i)][indices]
 
-        #         return tuple_acc
+                return tuple_acc
 
-        #     return iter(
-        #         map(
-        #             lambda i: make_tuple_acc(i),
-        #             range(self.tuple_size),
-        #         )
-        #     )
+            return iter(
+                map(
+                    lambda i: make_tuple_acc(i),
+                    range(self.tuple_size),
+                )
+            )
 
     return _field()
 
@@ -323,18 +325,21 @@ def apply_stencil(stencil, domain, connectivities_and_in_fields, out):
 def generic_scan(axis, fun, *, backward):
     def scanner(*inps):
         # TODO assert all inp have the same axises
-        axises = inps[0].axises
+        dimensions = inps[0].dimensions
 
         def make_elem_access(tuple_size):
-            new_axises = axises if tuple_size is None else axises + (TupleDim__,)
+            new_dimensions = (
+                dimensions
+                if tuple_size is None
+                else dimensions + (Dimension(TupleDim__, range(tuple_size)),)
+            )
 
             @element_access_to_field(
-                axises=new_axises,
+                dimensions=new_dimensions,
                 element_type=inps[0].element_type,
                 tuple_size=tuple_size,
             )
             def elem_acc(indices):
-                tmp_axises = new_axises
                 scan_index, rest = split_indices(indices, (axis,))
                 assert len(scan_index) == 1
 

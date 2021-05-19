@@ -57,10 +57,6 @@ class E2V:
     pass
 
 
-def print_dims(field):
-    print([f"axis={str(dim.axis(0))},{dim.range}," for dim in field.dimensions])
-
-
 def stencil(fun):
     def _fun(*args):
         return materialize(fun(*args))

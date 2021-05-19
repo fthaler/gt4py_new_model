@@ -7,8 +7,8 @@ from unstructured.concepts import (
     scan_pass,
 )
 from unstructured.utils import (
+    Dimension,
     axis,
-    print_axises,
     split_indices,
 )
 import numpy as np
@@ -27,7 +27,7 @@ class I:
 
 def k_sum_explicit(inp):
     @element_access_to_field(
-        axises=inp.axises, element_type=inp.element_type, tuple_size=None
+        dimensions=inp.dimensions, element_type=inp.element_type, tuple_size=None
     )
     def elem_acc(indices):
         state = 0
@@ -60,7 +60,7 @@ def k_sum(state, inp):  # both state and inp are k slices
 
 def k_sum_scanner(inp):
     @element_access_to_field(
-        axises=inp.axises, element_type=inp.element_type, tuple_size=None
+        dimensions=inp.dimensions, element_type=inp.element_type, tuple_size=None
     )
     def elem_acc(indices):
         k_index, rest = split_indices(indices, (K,))
@@ -192,7 +192,7 @@ def test_forward_backward():
 def make_field_tuple(*fields):
     # TODO assert all have same axis
     @element_access_to_field(
-        axises=fields[0].axises + (TupleDim__,),
+        dimensions=fields[0].dimensions + (Dimension(TupleDim__, len(fields)),),
         element_type=fields[0].element_type,
         tuple_size=len(fields),
     )

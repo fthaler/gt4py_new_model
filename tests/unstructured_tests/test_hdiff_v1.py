@@ -13,6 +13,7 @@ from unstructured.helpers import (
 )
 
 from unstructured.utils import (
+    Dimension,
     get_index_of_type,
     print_axises,
     remove_indices_of_axises,
@@ -55,7 +56,7 @@ def make_fivepoint(shape_2d):
                     assert False
 
             @element_access_to_field(
-                axises=field.axises + (FP,),
+                dimensions=field.dimensions + (Dimension(FP, 5),),
                 element_type=field.element_type,
                 tuple_size=None,
             )
@@ -75,7 +76,6 @@ def make_fivepoint(shape_2d):
 
 
 def laplacian(conn, inp):
-    print_axises(inp.axises)
     five_point = conn(inp)
     return -4 * five_point[FP.center] + (
         five_point[FP.right]

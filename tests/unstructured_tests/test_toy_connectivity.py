@@ -3,8 +3,11 @@ import pytest
 from unstructured.helpers import (
     array_as_field,
     index_field,
+    print_dims,
 )
 from unstructured.utils import (
+    Dimension,
+    dimensions_compatible,
     remove_axis,
     remove_indices_of_axises,
     axis,
@@ -181,10 +184,9 @@ def v2e():
 
 def test_field_and_connectivity_compatible(e2v, vertex_field, edge_field):
     e2v_field = e2v(vertex_field)
-    assert e2v_field.axises == (
-        Edge,
-        E2V,
-    )  # this comparison should do unordered comparison
+    assert dimensions_compatible(
+        e2v_field.dimensions, (Dimension(Edge, None), Dimension(E2V, None))
+    )
 
     with pytest.raises(TypeError):
         e2v(edge_field)
@@ -193,10 +195,26 @@ def test_field_and_connectivity_compatible(e2v, vertex_field, edge_field):
 def test_slicing():
     vertex_edge_e2v_field = array_as_field(Vertex, Edge, E2V)(np.ones((9, 18, 2)))
 
-    assert vertex_edge_e2v_field.axises == (Vertex, Edge, E2V)
-    assert vertex_edge_e2v_field[Vertex(0)].axises == (Edge, E2V)
-    assert vertex_edge_e2v_field[Vertex(0)][E2V(0)].axises == (Edge,)
-    assert vertex_edge_e2v_field[Vertex(0), Edge(0)].axises == (E2V,)
+    print_dims(vertex_edge_e2v_field)
+    assert dimensions_compatible(
+        vertex_edge_e2v_field.dimensions,
+        (
+            Dimension(Vertex, range(9)),
+            Dimension(Edge, range(18)),
+            Dimension(E2V, range(2)),
+        ),
+    )
+    assert dimensions_compatible(
+        vertex_edge_e2v_field[Vertex(0)].dimensions,
+        (Dimension(Edge, None), Dimension(E2V, None)),
+    )
+
+    assert dimensions_compatible(
+        vertex_edge_e2v_field[Vertex(0)][E2V(0)].dimensions, (Dimension(Edge, None),)
+    )
+    assert dimensions_compatible(
+        vertex_edge_e2v_field[Vertex(0), Edge(0)].dimensions, (Dimension(E2V, None),)
+    )
 
     assert vertex_edge_e2v_field[Vertex(0)][Edge(0), E2V(0)] == 1
 
