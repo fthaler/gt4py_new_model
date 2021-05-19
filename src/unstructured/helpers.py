@@ -11,10 +11,8 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from typing import Sequence
-from numpy import array, ndarray
 from unstructured.concepts import element_access_to_field
-from unstructured.utils import make_dimensions, print_axises, split_indices
+from unstructured.utils import Dimension, make_dimensions, split_indices
 import numpy as np
 
 
@@ -80,9 +78,13 @@ def materialize(field):
     return array_as_field(*(dim.axis for dim in field.dimensions))(np.asarray(field))
 
 
-def constant_field(*dims):
+def constant_field(*axises):
     def _impl(c):
-        @element_access_to_field(axises=dims, element_type=type(c), tuple_size=None)
+        @element_access_to_field(
+            dimensions=tuple(Dimension(axis, None) for axis in axises),
+            element_type=type(c),
+            tuple_size=None,
+        )
         def _field(_):
             return c
 
@@ -91,8 +93,10 @@ def constant_field(*dims):
     return _impl
 
 
-def index_field(loc):
-    @element_access_to_field(axises=(loc,), element_type=int, tuple_size=None)
+def index_field(loc, range=None):
+    @element_access_to_field(
+        dimensions=Dimension(loc, range), element_type=int, tuple_size=None
+    )
     def fun(index):
         assert len(index) == 1
         return index[0].__index__()

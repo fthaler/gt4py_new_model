@@ -17,15 +17,14 @@ from numbers import Number
 import numpy as np
 
 from unstructured.utils import (
+    Dimension,
     axis,
-    axises_eq,
-    dimensions_eq,
-    print_axises,
+    combine_dimensions,
+    dimensions_compatible,
+    order_dimensions,
     remove_axises_from_dimensions,
     remove_indices_of_axises,
     tupelize,
-    remove_axis,
-    remove_axises_from_axises,
     split_indices,
 )
 
@@ -153,12 +152,17 @@ class _FieldArithmetic:
                 # assert axises_eq(
                 #     first.axises, second.axises
                 # ), f"first=[{[str(i(0)) for i in first.axises]}, second={[str(i(0)) for i in second.axises]}"  # TODO order independant
-                assert dimensions_eq(first.dimensions, second.dimensions)
+                assert dimensions_compatible(first.dimensions, second.dimensions)
                 if first.element_type is not None and second.element_type is not None:
                     assert first.element_type == second.element_type
+                combined_dimensions = combine_dimensions(
+                    first.dimensions, second.dimensions
+                )
+            else:
+                combined_dimensions = first.dimensions
 
             class _field(Field):
-                dimensions = first.dimensions
+                dimensions = combined_dimensions
                 element_type = first.element_type
                 tuple_size = first.tuple_size
 
@@ -214,14 +218,27 @@ class Field(_FieldArithmetic):
 
         return res
 
+    def array_of(self, *axises):
+        # TODO assert all axises are in self.dimensions
+
+        @element_access_to_field(
+            dimensions=order_dimensions(self.dimensions, axises),
+            element_type=self.element_type,
+            tuple_size=self.tuple_size,
+        )
+        def elem_acc(indices):
+            return self[indices]
+
+        return elem_acc
+
 
 def if_(cond, true_branch, false_branch):
     assert isinstance(cond, Field)
     assert isinstance(true_branch, Field)
     assert isinstance(false_branch, Field)
 
-    assert true_branch.axises == false_branch.axises
-    assert cond.axises == true_branch.axises
+    assert dimensions_compatible(true_branch.dimensions, false_branch.dimensions)
+    assert dimensions_compatible(cond.dimensions, true_branch.dimensions)
     if true_branch.element_type is not None and false_branch.element_type is not None:
         assert true_branch.element_type == false_branch.element_type
         element_type = true_branch.element_type
@@ -232,7 +249,10 @@ def if_(cond, true_branch, false_branch):
     assert true_branch.tuple_size == false_branch.tuple_size
 
     @element_access_to_field(
-        axises=true_branch.axises,
+        dimensions=combine_dimensions(
+            cond.dimensions,
+            combine_dimensions(true_branch.dimensions, false_branch.dimensions),
+        ),
         element_type=element_type,
         tuple_size=true_branch.tuple_size,
     )
@@ -273,15 +293,15 @@ def sum_reduce(dim):
     return reduce(operator.add, 0)(dim)
 
 
-def broadcast(*dims):
+def broadcast(*axises):
     def _impl(field):
         @element_access_to_field(
-            axises=field.axises + dims,
+            dimensions=field.dimensions + tuple(Dimension(dim, None) for dim in axises),
             element_type=field.element_type,
             tuple_size=field.tuple_size,
         )
         def elem_access(indices):
-            return field[remove_indices_of_axises(dims, indices)]
+            return field[remove_indices_of_axises(axises, indices)]
 
         return elem_access
 

@@ -23,3 +23,16 @@ def test_addition():
 
 
 test_addition()
+
+
+@axis()
+class Dim2:
+    pass
+
+
+def test_dimension_swap():
+    field = array_as_field(Dim, Dim2)(np.zeros((4, 5)))
+
+    out_field = np.zeros((5, 4))
+
+    out_field[:] = field.array_of(Dim2, Dim)

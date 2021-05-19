@@ -46,11 +46,24 @@ def axis(*, length=None, aliases=None):
 class Dimension:
     def __init__(self, axis, range):
         self.axis = axis
-        self.range = range  # range or set of indices
+        self.range = range  # range or set of indices or None (=infinite)
 
     def __eq__(self, other):
-        if self.axis == other.axis and self.range == other.range:
+        if self.axis == other.axis:
+            if self.range is None or other.range is None or self.range == other.range:
+                return True
+        return False
+
+    def __lt__(self, other):
+        if hash(self.axis) < hash(other.axis):
             return True
+        elif hash(self.axis) == hash(other.axis):
+            if other.range is None:
+                return False
+            if self.range is None:
+                return True
+            if self.range < other.range:
+                return True
         return False
 
 
@@ -68,13 +81,57 @@ def axises_eq(first, second):
     return True
 
 
-def dimensions_eq(first, second):
+def dimensions_compatible(first, second):
     lst = list(second)
     for dim in first:
         if dim not in lst:
             return False
         lst.remove(dim)
     return True
+
+
+def combine_dimensions(first, second):
+    # TODO keep order of first?
+    res = []
+    first = list(first)
+    first.sort()
+    second = list(second)
+    second.sort()
+    for f, s in zip(first, second):
+        r = s.range if f.range is None else f.range
+        res.append(Dimension(f.axis, r))
+    return tuple(res)
+
+
+def order_dimensions(dimensions, ordered_axises):
+    res = []
+    dims = list(dimensions)
+    # oha...
+    for axis in ordered_axises:
+        for dim in dims:
+            if axis == dim.axis:
+                res.append(dim)
+                dims.remove(dim)
+                break
+    return tuple(res)
+
+
+# def test_combine_dimensions():
+#     @axis()
+#     class dim1:
+#         pass
+
+#     @axis()
+#     class dim2:
+#         pass
+
+#     first = (Dimension(dim1, range(5)), Dimension(dim2, None), Dimension(dim2, None))
+#     second = (Dimension(dim1, None), Dimension(dim2, range(3)), Dimension(dim2, None))
+
+#     print(list(dim.range for dim in combine_dimensions(first, second)))
+
+
+# test_combine_dimensions()
 
 
 def tupelize(tup):
