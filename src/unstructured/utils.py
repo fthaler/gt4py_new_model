@@ -72,15 +72,6 @@ def make_dimensions(axises, ranges):
     return tuple(Dimension(a, s) for a, s in zip(axises, ranges))
 
 
-def axises_eq(first, second):
-    lst = list(second)
-    for axis in first:
-        if axis not in lst:
-            return False
-        lst.remove(axis)
-    return True
-
-
 def dimensions_compatible(first, second):
     lst = list(second)
     for dim in first:
@@ -116,41 +107,11 @@ def order_dimensions(dimensions, ordered_axises):
     return tuple(res)
 
 
-# def test_combine_dimensions():
-#     @axis()
-#     class dim1:
-#         pass
-
-#     @axis()
-#     class dim2:
-#         pass
-
-#     first = (Dimension(dim1, range(5)), Dimension(dim2, None), Dimension(dim2, None))
-#     second = (Dimension(dim1, None), Dimension(dim2, range(3)), Dimension(dim2, None))
-
-#     print(list(dim.range for dim in combine_dimensions(first, second)))
-
-
-# test_combine_dimensions()
-
-
 def tupelize(tup):
     if isinstance(tup, tuple):
         return tup
     else:
         return (tup,)
-
-
-def remove_axis(axis, axises):
-    i = axises.index(axis)
-    return axises[:i] + axises[i + 1 :]
-
-
-def remove_axises_from_axises(to_remove, axises):
-    res = axises
-    for axis in to_remove:
-        res = remove_axis(axis, res)
-    return res
 
 
 def remove_axises_from_dimensions(to_remove, dimensions):
@@ -175,10 +136,10 @@ def remove_indices_of_axises(axises, indices):
     return res
 
 
-def get_index_of_type(loc):
+def get_index_of_type(axis):
     def fun(indices):
         for ind in indices:
-            if isinstance(ind, loc):
+            if isinstance(ind, axis):
                 return ind
 
     return fun
@@ -196,7 +157,3 @@ def split_indices(indices, cond_axises):
             false_indices.append(i)
     assert len(cond_axises) == 0
     return tuple(true_indices), tuple(false_indices)
-
-
-def print_axises(axises):
-    print([str(axis(0)) for axis in axises])

@@ -15,7 +15,6 @@ from unstructured.helpers import (
 from unstructured.utils import (
     Dimension,
     get_index_of_type,
-    print_axises,
     remove_indices_of_axises,
     axis,
 )

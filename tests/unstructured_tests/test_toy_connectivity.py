@@ -8,7 +8,6 @@ from unstructured.helpers import (
 from unstructured.utils import (
     Dimension,
     dimensions_compatible,
-    remove_axis,
     remove_indices_of_axises,
     axis,
 )
@@ -115,14 +114,6 @@ def test_element_type():
     assert e2v_neightbl.element_type == Vertex
     assert isinstance(e2v_neightbl[Edge(1), E2V(0)], Vertex)
     assert isinstance(v2e_neightbl[Vertex(1), V2E(0)], Edge)
-
-
-def test_remove_axis():
-    axises = (Edge, Vertex, E2V)
-
-    assert remove_axis(Edge, axises) == (Vertex, E2V)
-    assert remove_axis(Vertex, axises) == (Edge, E2V)
-    assert remove_axis(E2V, axises) == (Edge, Vertex)
 
 
 def test_remove_indices():

@@ -1,5 +1,5 @@
 from unstructured.concepts import apply_stencil, backward_scan, forward_scan
-from unstructured.utils import axis, print_axises
+from unstructured.utils import axis
 from unstructured.helpers import array_as_field
 import numpy as np
 import pytest
