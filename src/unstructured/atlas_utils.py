@@ -35,7 +35,6 @@ def make_sparse_index_field_from_atlas_connectivity(
             Dimension(neigh_loc, neigh_loc_size),
         ),
         element_type=field_loc,
-        tuple_size=None,
     )
     def element_access(indices):
         primary_index = get_index_of_type(primary_loc)(indices)

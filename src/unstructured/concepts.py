@@ -36,10 +36,7 @@ class TupleDim__:
     ...
 
 
-# tuple size is hacked on top...
-def make_field(
-    element_access, bind_indices, dimensions, element_type, *, tuple_size=None
-):
+def make_field(element_access, bind_indices, dimensions, element_type):
     dimensions = tupelize(dimensions)
 
     class _field(Field):
@@ -48,11 +45,6 @@ def make_field(
             self.dimensions = remove_axises_from_dimensions(
                 (type(i) for i in bind_indices), dimensions
             )
-            # self.axises = remove_axises_from_axises(
-            #     (type(i) for i in bind_indices), axises
-            # )
-            # self.axises =
-            self.tuple_size = tuple_size
 
         def __getitem__(self, indices):
             if isinstance(indices, Field):
@@ -70,7 +62,6 @@ def make_field(
 
         def __iter__(self):
             assert TupleDim__ in (dim.axis for dim in self.dimensions)
-            assert self.tuple_size is not None
 
             def make_tuple_acc(i):
                 @element_access_to_field(
@@ -78,28 +69,24 @@ def make_field(
                         (TupleDim__,), self.dimensions
                     ),
                     element_type=self.element_type,
-                    tuple_size=0,
                 )
                 def tuple_acc(indices):
                     return self[TupleDim__(i)][indices]
 
                 return tuple_acc
 
-            return iter(
-                map(
-                    lambda i: make_tuple_acc(i),
-                    range(self.tuple_size),
-                )
-            )
+            tuple_range = tuple(
+                dim.range for dim in self.dimensions if dim.axis == TupleDim__
+            )[0]
+
+            return iter(map(lambda i: make_tuple_acc(i), tuple_range))
 
     return _field()
 
 
-def element_access_to_field(*, dimensions, element_type, tuple_size):
+def element_access_to_field(*, dimensions, element_type):
     def _fun(element_access):
-        return make_field(
-            element_access, tuple(), dimensions, element_type, tuple_size=tuple_size
-        )
+        return make_field(element_access, tuple(), dimensions, element_type)
 
     return _fun
 
@@ -117,7 +104,6 @@ def field_getitem(field, index_field):
             + index_field.dimensions
         ),
         element_type=field.element_type,
-        tuple_size=field.tuple_size,
     )
     def element_access(indices):
         index_field_indices, rest = split_indices(
@@ -166,7 +152,6 @@ class _FieldArithmetic:
             class _field(Field):
                 dimensions = combined_dimensions
                 element_type = first.element_type
-                tuple_size = first.tuple_size
 
                 def __getitem__(self, index):
                     if isinstance(second, Field):
@@ -226,7 +211,6 @@ class Field(_FieldArithmetic):
         @element_access_to_field(
             dimensions=order_dimensions(self.dimensions, axises),
             element_type=self.element_type,
-            tuple_size=self.tuple_size,
         )
         def elem_acc(indices):
             return self[indices]
@@ -247,16 +231,12 @@ def if_(cond, true_branch, false_branch):
     else:
         element_type = None
 
-    assert cond.tuple_size == true_branch.tuple_size
-    assert true_branch.tuple_size == false_branch.tuple_size
-
     @element_access_to_field(
         dimensions=combine_dimensions(
             cond.dimensions,
             combine_dimensions(true_branch.dimensions, false_branch.dimensions),
         ),
         element_type=element_type,
-        tuple_size=true_branch.tuple_size,
     )
     def elem_acc(indices):
         return true_branch[indices] if cond[indices] else false_branch[indices]
@@ -273,7 +253,6 @@ def reduce(op, init):
             @element_access_to_field(
                 dimensions=remove_axises_from_dimensions((dim,), field.dimensions),
                 element_type=field.element_type,
-                tuple_size=field.tuple_size,
             )
             def elem_access(indices):
                 indices = tupelize(indices)
@@ -300,7 +279,6 @@ def broadcast(*axises):
         @element_access_to_field(
             dimensions=field.dimensions + tuple(Dimension(dim, None) for dim in axises),
             element_type=field.element_type,
-            tuple_size=field.tuple_size,
         )
         def elem_access(indices):
             return field[remove_indices_of_axises(axises, indices)]
@@ -337,7 +315,6 @@ def generic_scan(axis, fun, *, backward):
             @element_access_to_field(
                 dimensions=new_dimensions,
                 element_type=inps[0].element_type,
-                tuple_size=tuple_size,
             )
             def elem_acc(indices):
                 scan_index, rest = split_indices(indices, (axis,))

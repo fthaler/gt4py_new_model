@@ -58,7 +58,6 @@ def make_fivepoint(shape_2d):
             @element_access_to_field(
                 dimensions=field.dimensions + (Dimension(FP, 5),),
                 element_type=field.element_type,
-                tuple_size=None,
             )
             def elem_access(indices):
                 v_index = get_index_of_type(Vertex)(indices)

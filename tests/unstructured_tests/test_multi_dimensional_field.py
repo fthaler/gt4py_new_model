@@ -148,7 +148,7 @@ test_reduce()
 
 
 def test_tuple_dim():
-    my_field = array_as_field(TupleDim__, GridDim, tuple_size=2)(
+    my_field = array_as_field(TupleDim__, GridDim)(
         np.array([[1, 2, 3, 4], [5, 6, 7, 8]])
     )
     field1, field2 = my_field

@@ -26,9 +26,7 @@ class I:
 
 
 def k_sum_explicit(inp):
-    @element_access_to_field(
-        dimensions=inp.dimensions, element_type=inp.element_type, tuple_size=None
-    )
+    @element_access_to_field(dimensions=inp.dimensions, element_type=inp.element_type)
     def elem_acc(indices):
         state = 0
         k_index, rest = split_indices(indices, (K,))
@@ -59,9 +57,7 @@ def k_sum(state, inp):  # both state and inp are k slices
 
 
 def k_sum_scanner(inp):
-    @element_access_to_field(
-        dimensions=inp.dimensions, element_type=inp.element_type, tuple_size=None
-    )
+    @element_access_to_field(dimensions=inp.dimensions, element_type=inp.element_type)
     def elem_acc(indices):
         k_index, rest = split_indices(indices, (K,))
         assert len(k_index) == 1
@@ -192,9 +188,8 @@ def test_forward_backward():
 def make_field_tuple(*fields):
     # TODO assert all have same axis
     @element_access_to_field(
-        dimensions=fields[0].dimensions + (Dimension(TupleDim__, len(fields)),),
+        dimensions=fields[0].dimensions + (Dimension(TupleDim__, range(len(fields))),),
         element_type=fields[0].element_type,
-        tuple_size=len(fields),
     )
     def elem_acc(indices):
         tuple_index, rest = split_indices(indices, (TupleDim__,))

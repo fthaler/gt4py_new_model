@@ -30,7 +30,6 @@ def field_sequence_as_field(dim):
         @element_access_to_field(
             axises=(dim,) + seq[0].axises,
             element_type=seq[0].element_type,
-            tuple_size=seq[0].tuple_size,
         )
         def elem_acc(indices):
             current_dim, rest = split_indices(indices, (dim,))
@@ -43,7 +42,7 @@ def field_sequence_as_field(dim):
     return _fun
 
 
-def array_as_field(*axises, element_type=None, tuple_size=None):
+def array_as_field(*axises, element_type=None):
     def _fun(np_arr):
         assert np_arr.ndim == len(axises)
         for i in range(len(axises)):
@@ -55,7 +54,6 @@ def array_as_field(*axises, element_type=None, tuple_size=None):
         @element_access_to_field(
             dimensions=make_dimensions(axises, tuple(range(i) for i in np_arr.shape)),
             element_type=element_type,
-            tuple_size=tuple_size,
         )
         def element_access(indices):
             def _order_indices(indices):
@@ -84,7 +82,6 @@ def constant_field(*axises):
         @element_access_to_field(
             dimensions=tuple(Dimension(axis, None) for axis in axises),
             element_type=type(c),
-            tuple_size=None,
         )
         def _field(_):
             return c
@@ -95,9 +92,7 @@ def constant_field(*axises):
 
 
 def index_field(loc, range=None):
-    @element_access_to_field(
-        dimensions=Dimension(loc, range), element_type=int, tuple_size=None
-    )
+    @element_access_to_field(dimensions=Dimension(loc, range), element_type=int)
     def fun(index):
         assert len(index) == 1
         return index[0].__index__()
