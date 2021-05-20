@@ -12,17 +12,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
-def axis(*, length=None, aliases=None):
+def axis(*, aliases=None):
     def _impl(cls):
         class _axis:
             def __init__(self, index):
                 self.index = index
 
             def __index__(self):
-                if length is not None:
-                    if self.index >= length:
-                        raise IndexError()
-
                 return self.index
 
             def __str__(self):
@@ -30,9 +26,6 @@ def axis(*, length=None, aliases=None):
 
             def __eq__(self, other):
                 return type(self) == type(other) and self.index == other.__index__()
-
-        if length is not None:
-            setattr(_axis, "__len__", lambda self: length)
 
         if aliases:
             for i, alias in enumerate(aliases):
@@ -141,6 +134,15 @@ def get_index_of_type(axis):
         for ind in indices:
             if isinstance(ind, axis):
                 return ind
+
+    return fun
+
+
+def get_dimension_of_type(axis):
+    def fun(dimensions):
+        dims = tuple(dim for dim in dimensions if dim.axis == axis)
+        assert len(dims) > 0
+        return dims[0]
 
     return fun
 

@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 
-@axis(length=5)
+@axis()
 class KDim:
     ...
 
@@ -67,7 +67,6 @@ def tridiag_reference():
 def test_tridiag(tridiag_reference):
     a, b, c, d, x = tridiag_reference
     shape = a.shape
-    assert shape[2] == len(KDim(0))
     as_3d_field = array_as_field(IDim, JDim, KDim)
     a_s = as_3d_field(a)
     b_s = as_3d_field(b)

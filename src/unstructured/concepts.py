@@ -21,6 +21,7 @@ from unstructured.utils import (
     axis,
     combine_dimensions,
     dimensions_compatible,
+    get_dimension_of_type,
     order_dimensions,
     remove_axises_from_dimensions,
     remove_indices_of_axises,
@@ -246,9 +247,6 @@ def if_(cond, true_branch, false_branch):
 
 def reduce(op, init):
     def _red_dim(dim):
-        if not hasattr(dim(0), "__len__"):
-            raise TypeError("Dimension is not reducible")
-
         def _reduce(field):
             @element_access_to_field(
                 dimensions=remove_axises_from_dimensions((dim,), field.dimensions),
@@ -256,8 +254,9 @@ def reduce(op, init):
             )
             def elem_access(indices):
                 indices = tupelize(indices)
+                reduction_range = get_dimension_of_type(dim)(field.dimensions).range
                 res = init
-                for i in range(len(dim(0))):
+                for i in reduction_range:
                     val = field[(dim(i),) + indices]
                     if val is not None:
                         res = op(res, val)
@@ -318,6 +317,7 @@ def generic_scan(axis, fun, *, backward):
             )
             def elem_acc(indices):
                 scan_index, rest = split_indices(indices, (axis,))
+                scan_dimension = get_dimension_of_type(axis)(dimensions)
                 assert len(scan_index) == 1
 
                 state = None
@@ -325,9 +325,8 @@ def generic_scan(axis, fun, *, backward):
                 if not backward:
                     iter = list(range(scan_index[0].__index__() + 1))
                 else:
-                    iter = list(range(scan_index[0], len(axis(0))))
+                    iter = list(scan_dimension.range[scan_index[0] :])
                     iter.reverse()
-                    print(iter)
                 for ind in map(lambda i: axis(i), iter):
                     state = fun(state, *tuple(inp[ind] for inp in inps))
 

@@ -26,7 +26,7 @@ class Vertex:
     pass
 
 
-@axis(length=5, aliases=["center", "right", "left", "bottom", "top"])
+@axis(aliases=["center", "right", "left", "bottom", "top"])
 class FP:
     pass
 

@@ -15,12 +15,12 @@ import numpy as np
 from unstructured.helpers import array_as_field
 
 
-@axis(length=5)
+@axis()
 class K:
     ...
 
 
-@axis(length=2)
+@axis()
 class I:
     ...
 

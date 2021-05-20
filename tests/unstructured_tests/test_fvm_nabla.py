@@ -36,23 +36,23 @@ from .fvm_nabla_setup import (
 
 from unstructured.atlas_utils import make_sparse_index_field_from_atlas_connectivity
 
-# TODO remove length
-@axis(length=None)
+
+@axis()
 class Vertex:
     pass
 
 
-@axis(length=None)
+@axis()
 class Edge:
     pass
 
 
-@axis(length=7)
+@axis()
 class V2E:
     pass
 
 
-@axis(length=2)
+@axis()
 class E2V:
     pass
 

@@ -28,7 +28,7 @@ class GridIndexField:
         return index.__index__()
 
 
-@axis(length=2)
+@axis()
 class Vec2Dim:
     pass
 
@@ -51,8 +51,6 @@ def test_indexing():
     a_vec2 = Vec2Field(42, 43)
     assert a_vec2[Vec2Dim(0)] == 42
     assert a_vec2[Vec2Dim(1)] == 43
-    with pytest.raises(IndexError):
-        operator.index(Vec2Dim(2))
 
     assert Vec2Dim(1) != GridDim(1)
     assert Vec2Dim(1) == Vec2Dim(1)

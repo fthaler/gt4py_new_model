@@ -23,12 +23,12 @@ class Vertex:
     pass
 
 
-@axis(length=2)
+@axis()
 class E2V:
     pass
 
 
-@axis(length=4)
+@axis()
 class V2E:
     pass
 
