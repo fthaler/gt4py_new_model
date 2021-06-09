@@ -14,6 +14,8 @@ import itertools
 
 from unstructured.utils import tupelize
 
+from .hdiff_reference import hdiff_reference
+
 # concepts
 
 
@@ -44,10 +46,11 @@ class MDIterator:
 
 
 class LocatedField:
-    def __init__(self, getter, axises, *, setter=None):
+    def __init__(self, getter, axises, *, setter=None, array=None):
         self.getter = getter
         self.axises = axises
         self.setter = setter
+        self.array = array
 
     def __getitem__(self, indices):
         indices = tupelize(indices)
@@ -57,6 +60,11 @@ class LocatedField:
         if self.setter is None:
             raise TypeError("__setitem__ not supported for this field")
         self.setter(indices, value)
+
+    def __array__(self):
+        if self.array is None:
+            raise TypeError("__array__ not supported for this field")
+        return self.array()
 
 
 def shift(iter, offset):  # shift is lazy
@@ -139,7 +147,7 @@ def np_as_located_field(*axises, origin=None):
         def getter(indices):
             return a[_tupsum(indices, offsets)]
 
-        return LocatedField(getter, axises, setter=setter)
+        return LocatedField(getter, axises, setter=setter, array=a.__array__)
 
     return _maker
 
@@ -223,6 +231,10 @@ class IStag(CartesianAxis):
     ...
 
 
+class JStag(CartesianAxis):
+    ...
+
+
 class I2IStag:
     def __init__(self, offset) -> None:
         self.offset = offset
@@ -247,6 +259,34 @@ class IStag2I:
             ipos = int(new_pos[IStag] + self.offset + 0.5)
             del new_pos[IStag]
             new_pos[I] = ipos
+            return new_pos
+        return pos
+
+
+class J2JStag:
+    def __init__(self, offset) -> None:
+        self.offset = offset
+
+    def __call__(self, pos: Dict) -> Dict:
+        if J in pos.keys():
+            new_pos = pos.copy()
+            ipos = int(new_pos[J] + self.offset - 0.5)
+            del new_pos[J]
+            new_pos[JStag] = ipos
+            return new_pos
+        return pos
+
+
+class JStag2J:
+    def __init__(self, offset) -> None:
+        self.offset = offset
+
+    def __call__(self, pos: Dict) -> Dict:
+        if JStag in pos.keys():
+            new_pos = pos.copy()
+            ipos = int(new_pos[JStag] + self.offset + 0.5)
+            del new_pos[JStag]
+            new_pos[J] = ipos
             return new_pos
         return pos
 
@@ -345,3 +385,60 @@ def test_lift():
 
 
 test_lift()
+
+
+def laplacian(inp):
+    return -4 * deref(inp) + (
+        deref(shift(inp, I(1)))
+        + deref(shift(inp, I(-1)))
+        + deref(shift(inp, J(1)))
+        + deref(shift(inp, J(-1)))
+    )
+
+
+def hdiff_flux_x(inp):
+    lap = lift(laplacian)(inp)
+    flux = deref(shift(lap, IStag2I(-0.5))) - deref(shift(lap, IStag2I(0.5)))
+
+    if flux * (deref(shift(inp, IStag2I(0.5))) - deref(shift(inp, IStag2I(-0.5)))) > 0:
+        return 0
+    else:
+        return flux
+
+
+def hdiff_flux_y(inp):
+    lap = lift(laplacian)(inp)
+    flux = deref(shift(lap, JStag2J(-0.5))) - deref(shift(lap, JStag2J(0.5)))
+
+    if flux * (deref(shift(inp, JStag2J(0.5))) - deref(shift(inp, JStag2J(-0.5)))) > 0:
+        return 0
+    else:
+        return flux
+
+
+def hdiff(inp, coeff):
+    flx = lift(hdiff_flux_x)(inp)
+    fly = lift(hdiff_flux_y)(inp)
+    return deref(inp) - deref(coeff) * (
+        deref(shift(flx, I2IStag(0.5)))
+        - deref(shift(flx, I2IStag(-0.5)))
+        + deref(shift(fly, J2JStag(0.5)))
+        - deref(shift(fly, J2JStag(-0.5)))
+    )
+
+
+def test_hdiff(hdiff_reference):
+    inp, coeff, out = hdiff_reference
+    shape = out.shape
+
+    inp_s = np_as_located_field(I, J, K, origin={I: 2, J: 2, K: 0})(inp)
+    coeff_s = np_as_located_field(I, J, K)(coeff)
+    out_s = np_as_located_field(I, J, K)(np.zeros_like(out))
+
+    domain = {I: range(shape[0]), J: range(shape[1]), K: range(shape[2])}
+
+    apply_stencil(hdiff, domain, [inp_s, coeff_s], [out_s])
+
+    assert out[1, 2, 3] == out_s[1, 2, 3]
+
+    # assert np.allclose(out, np.asarray(out_s))
