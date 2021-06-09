@@ -22,16 +22,24 @@ def get_order_indices(axises, pos):
 
 
 class MDIterator:
-    def __init__(self, field, pos) -> None:
+    def __init__(self, field, pos, *, offsets=[]) -> None:
         self.field = field
         self.pos = pos
+        self.offsets = offsets
+
+    def shift(self, offset):
+        return MDIterator(self.field, self.pos, offsets=[*self.offsets, offset])
 
     def deref(self):
-        if not all(axis in self.pos.keys() for axis in self.field.axises):
+        shifted_pos = self.pos
+        for offset in self.offsets:
+            shifted_pos = offset(shifted_pos)
+
+        if not all(axis in shifted_pos.keys() for axis in self.field.axises):
             raise IndexError(
                 "Iterator position doesn't point to valid location for its field."
             )
-        ordered_indices = get_order_indices(self.field.axises, self.pos)
+        ordered_indices = get_order_indices(self.field.axises, shifted_pos)
         return self.field[ordered_indices]
 
 
@@ -51,12 +59,34 @@ class LocatedField:
         self.setter(indices, value)
 
 
-def shift(iter, offset):
-    return MDIterator(iter.field, offset(iter.pos))
+def shift(iter, offset):  # shift is lazy
+    return iter.shift(offset)
 
 
 def deref(iter):
     return iter.deref()
+
+
+def lift(stencil):
+    def impl(*args):
+        class wrap_iterator:
+            def __init__(self, *, offsets=[]) -> None:
+                self.offsets = offsets
+
+            def shift(self, offset):
+                return wrap_iterator(offsets=[*self.offsets, offset])
+
+            def deref(self):
+                shifted_args = args
+                for offset in self.offsets:
+                    shifted_args = tuple(
+                        map(lambda arg: shift(arg, offset), shifted_args)
+                    )
+                return stencil(*shifted_args)
+
+        return wrap_iterator()
+
+    return impl
 
 
 def named_range(axis, range):
@@ -276,44 +306,42 @@ test_non_zero_origin()
 
 def explicit_nested_sum(inp):
     class shiftable_sum:
-        shift = None
+        def __init__(self, *, offsets=[]) -> None:
+            self.offsets = offsets
 
         def deref(self):
-            return deref(shift(inp, I(-1))) + deref(shift(inp, I(1)))
+            shifted_inp = inp
+            for offset in self.offsets:
+                shifted_inp = shift(shifted_inp, offset)
+            return deref(shift(shifted_inp, I(-1))) + deref(shift(shifted_inp, I(1)))
 
-    return deref(shiftable_sum())
+        def shift(self, offset):
+            return shiftable_sum(offsets=[*self.offsets, offset])
+
+    return deref(shift(shiftable_sum(), I(1)))
 
 
 def test_explicit_nested_sum():
-    inp = np_as_located_field(I, origin={I: 1})(np.asarray([1, 2, 3, 4, 5]))
-    out = np_as_located_field(I)(np.zeros([3]))
-    apply_stencil(explicit_nested_sum, {I: range(3)}, [inp], [out])
+    inp = np_as_located_field(I, origin={I: 2})(np.asarray([1, 2, 3, 4, 5]))
+    out = np_as_located_field(I)(np.zeros([1]))
+    apply_stencil(explicit_nested_sum, {I: range(1)}, [inp], [out])
     print(out[0])
 
 
 test_explicit_nested_sum()
 
-# def lift(stencil):
-#     def impl(arg):  # TODO multiple args
-#         class _field:
 
-#         wrap = MDIterator(arg.field, arg.pos)
-#         return wrap
-
-#     return impl
+def nested_sum(inp):
+    sum = lift(lr_sum)(inp)
+    return lr_sum(sum)
 
 
-# def nested_sum(inp):
-#     sum = lift(lr_sum)(inp)
-#     return lr_sum(sum)
+def test_lift():
+    inp = np_as_located_field(I, origin={I: 2})(np.asarray([1, 2, 3, 4, 5]))
+    out = np_as_located_field(I)(np.zeros([1]))
+    apply_stencil(nested_sum, {I: range(1)}, [inp], [out])
+    print(out[0])
+    assert out[0] == 12
 
 
-# def test_lift():
-#     inp = np_as_located_field(I, origin={I: 2})(np.asarray([1, 2, 3, 4, 5]))
-#     out = np_as_located_field(I)(np.zeros([1]))
-#     apply_stencil(nested_sum, {I: range(1)}, [inp], [out])
-#     print(out[0])
-#     assert out[0] == 12
-
-
-# test_lift()
+test_lift()
