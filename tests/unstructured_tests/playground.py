@@ -7,6 +7,7 @@
 # GeneralizedOffset is a callable that takes pos and returns new pos
 
 
+from .fvm_nabla_setup import assert_close, nabla_setup
 from typing import Callable, Dict
 import numpy as np
 import pytest
@@ -20,7 +21,7 @@ from .hdiff_reference import hdiff_reference
 
 
 def get_order_indices(axises, pos):
-    return tuple(pos[axis] for axis in axises)
+    return tuple(slice(None) if axis is ExtraDim else pos[axis] for axis in axises)
 
 
 class MDIterator:
@@ -32,12 +33,28 @@ class MDIterator:
     def shift(self, offset):
         return MDIterator(self.field, self.pos, offsets=[*self.offsets, offset])
 
-    def deref(self):
+    def is_none(self):
         shifted_pos = self.pos
+        if shifted_pos is None:
+            return True
         for offset in self.offsets:
             shifted_pos = offset(shifted_pos)
+            if shifted_pos is None:
+                return True
+        return False
 
-        if not all(axis in shifted_pos.keys() for axis in self.field.axises):
+    def deref(self):
+        shifted_pos = self.pos
+        if shifted_pos is None:
+            return None
+        for offset in self.offsets:
+            shifted_pos = offset(shifted_pos)
+            if shifted_pos is None:
+                return None
+
+        if not all(
+            axis in [*shifted_pos.keys(), ExtraDim] for axis in self.field.axises
+        ):
             raise IndexError(
                 "Iterator position doesn't point to valid location for its field."
             )
@@ -90,6 +107,9 @@ def lift(stencil):
                     shifted_args = tuple(
                         map(lambda arg: shift(arg, offset), shifted_args)
                     )
+
+                if any(shifted_arg.is_none() for shifted_arg in shifted_args):
+                    return None
                 return stencil(*shifted_args)
 
         return wrap_iterator()
@@ -124,11 +144,24 @@ def apply_stencil(sten, domain, ins, outs):  # domain is Dict[axis, range]
             out[ordered_indices] = r
 
 
+# this is a hack for having sparse field, we can just pass extra dimensions and you get an array
+# this is probably not what we want
+class ExtraDim:
+    ...
+
+
 # helpers
 
 
 def _tupsum(a, b):
-    return tuple(sum(i) for i in zip(a, b))
+    def sum_if_not_slice(ab_elems):
+        return (
+            slice(None)
+            if (isinstance(ab_elems[0], slice) or isinstance(ab_elems[1], slice))
+            else sum(ab_elems)
+        )
+
+    return tuple(sum_if_not_slice(i) for i in zip(a, b))
 
 
 def np_as_located_field(*axises, origin=None):
@@ -439,6 +472,119 @@ def test_hdiff(hdiff_reference):
 
     apply_stencil(hdiff, domain, [inp_s, coeff_s], [out_s])
 
-    assert out[1, 2, 3] == out_s[1, 2, 3]
+    assert np.allclose(out, np.asarray(out_s))
 
-    # assert np.allclose(out, np.asarray(out_s))
+
+### nabla
+
+fvm_nabla_setup = nabla_setup()
+
+
+class Vertex:
+    ...
+
+
+class Edge:
+    ...
+
+
+class E2V:
+    def __init__(self, neigh_index) -> None:
+        self.neigh_index = neigh_index
+
+    def __call__(self, pos: Dict) -> Dict:
+        e2v = fvm_nabla_setup.edges2node_connectivity
+        if Edge in pos.keys():
+            new_pos = pos.copy()
+            new_pos[Vertex] = e2v[new_pos[Edge], self.neigh_index]
+            del new_pos[Edge]
+            return new_pos
+        return pos
+
+
+class V2E:
+    def __init__(self, neigh_index) -> None:
+        self.neigh_index = neigh_index
+
+    def __call__(self, pos: Dict) -> Dict:
+        v2e = fvm_nabla_setup.nodes2edge_connectivity
+        if Vertex in pos.keys():
+            if self.neigh_index < v2e.cols(pos[Vertex]):
+                new_pos = pos.copy()
+                new_pos[Edge] = v2e[new_pos[Vertex], self.neigh_index]
+                del new_pos[Vertex]
+                return new_pos
+            else:
+                return None
+        return pos
+
+
+def compute_zavgS(pp, S_M):
+    zavg = 0.5 * (deref(shift(pp, E2V(0))) + deref(shift(pp, E2V(1))))
+    return deref(S_M) * zavg
+
+
+def compute_pnabla(pp, S_M, sign, vol):
+    zavgS = lift(compute_zavgS)(pp, S_M)
+    # pnabla_M = sum_reduce(V2E)(zavgS * sign)
+    pnabla_M = 0
+    for n in range(7):
+        zavgS_n = deref(shift(zavgS, V2E(n)))
+        if zavgS_n is not None:
+            pnabla_M += zavgS_n * deref(sign)[n]
+
+    return pnabla_M / deref(vol)
+
+
+def nabla(
+    pp,
+    S_MXX,
+    S_MYY,
+    sign,
+    vol,
+):
+    return compute_pnabla(pp, S_MXX, sign, vol), compute_pnabla(pp, S_MYY, sign, vol)
+
+
+def test_compute_zavgS():
+    setup = nabla_setup()
+
+    pp = np_as_located_field(Vertex)(setup.input_field)
+    S_MXX, S_MYY = tuple(map(np_as_located_field(Edge), setup.S_fields))
+
+    zavgS = np_as_located_field(Edge)(np.zeros((setup.edges_size)))
+
+    apply_stencil(compute_zavgS, {Edge: range(setup.edges_size)}, [pp, S_MXX], [zavgS])
+    assert_close(-199755464.25741270, min(zavgS))
+    assert_close(388241977.58389181, max(zavgS))
+
+    apply_stencil(compute_zavgS, {Edge: range(setup.edges_size)}, [pp, S_MYY], [zavgS])
+    assert_close(-1000788897.3202186, min(zavgS))
+    assert_close(1000788897.3202186, max(zavgS))
+
+
+def test_nabla():
+    setup = nabla_setup()
+
+    sign = np_as_located_field(Vertex, ExtraDim)(setup.sign_field)
+    pp = np_as_located_field(Vertex)(setup.input_field)
+    S_MXX, S_MYY = tuple(map(np_as_located_field(Edge), setup.S_fields))
+    vol = np_as_located_field(Vertex)(setup.vol_field)
+
+    pnabla_MXX = np_as_located_field(Vertex)(np.zeros((setup.nodes_size)))
+    pnabla_MYY = np_as_located_field(Vertex)(np.zeros((setup.nodes_size)))
+
+    print(f"nodes: {setup.nodes_size}")
+    print(f"edges: {setup.edges_size}")
+
+    apply_stencil(
+        nabla,
+        {Vertex: range(setup.nodes_size)},
+        [pp, S_MXX, S_MYY, sign, vol],
+        [pnabla_MXX, pnabla_MYY],
+    )
+
+    assert_close(-3.5455427772566003e-003, min(pnabla_MXX))
+    assert_close(3.5455427772565435e-003, max(pnabla_MXX))
+    assert_close(-3.3540113705465301e-003, min(pnabla_MYY))
+    assert_close(3.3540113705465301e-003, max(pnabla_MYY))
