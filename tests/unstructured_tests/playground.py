@@ -588,3 +588,144 @@ def test_nabla():
     assert_close(3.5455427772565435e-003, max(pnabla_MXX))
     assert_close(-3.3540113705465301e-003, min(pnabla_MYY))
     assert_close(3.3540113705465301e-003, max(pnabla_MYY))
+
+
+### indirect vs direct addressing
+
+# Cells
+# 0 1 2
+# 3 4 5
+# 6 7 8
+
+# Edges
+#    0   1   2
+#  3   4   5   6
+#    7   8   9
+# 10  11  12  13
+#   14  15  16
+# 17  18  19  20
+#   21  22  23
+class Cell:
+    ...
+
+
+c2e_tbl = [
+    [0, 4, 7, 3],
+    [1, 5, 8, 4],
+    [2, 6, 9, 5],
+    [7, 11, 14, 10],
+    [8, 12, 15, 11],
+    [9, 13, 16, 12],
+    [14, 18, 21, 17],
+    [15, 19, 22, 18],
+    [16, 20, 23, 19],
+]
+
+
+def edges_to_cell(C2E):
+    def variant(inp):
+        return (
+            deref(shift(inp, C2E(0)))
+            + deref(shift(inp, C2E(1)))
+            + deref(shift(inp, C2E(2)))
+            + deref(shift(inp, C2E(3)))
+        )
+
+    return variant
+
+
+class C2E_indirect:
+    def __init__(self, neigh_index) -> None:
+        self.neigh_index = neigh_index
+
+    def __call__(self, pos: Dict) -> Dict:
+        if Cell in pos.keys():
+            new_pos = pos.copy()
+            new_pos[Edge] = c2e_tbl[new_pos[Cell]][self.neigh_index]
+            del new_pos[Cell]
+            return new_pos
+        return pos
+
+
+def test_indirect():
+    inp = np_as_located_field(Edge)(np.asarray(list(range(24))))
+    out = np_as_located_field(Cell)(np.zeros([9]))
+
+    ref = np.asarray(list(sum(row) for row in c2e_tbl))
+
+    apply_stencil(edges_to_cell(C2E_indirect), {Cell: range(9)}, [inp], [out])
+    assert np.allclose(ref, np.asarray(out))
+
+
+class ColorE:
+    ...
+
+
+class IE:
+    ...
+
+
+class JE:
+    ...
+
+
+class IC:
+    ...
+
+
+class JC:
+    ...
+
+
+class C2E_strided:
+    def __init__(self, neigh_index) -> None:
+        self.neigh_index = neigh_index
+
+    def __call__(self, pos: Dict) -> Dict:
+        if IC in pos.keys() and JC in pos.keys():
+            new_pos = pos.copy()
+            del new_pos[IC]
+            del new_pos[JC]
+
+            if self.neigh_index == 0:
+                new_pos[IE] = pos[IC]
+                new_pos[JE] = pos[JC]
+                new_pos[ColorE] = 0
+            elif self.neigh_index == 1:
+                new_pos[IE] = pos[IC]
+                new_pos[JE] = pos[JC] + 1
+                new_pos[ColorE] = 1
+            elif self.neigh_index == 2:
+                new_pos[IE] = pos[IC] + 1
+                new_pos[JE] = pos[JC]
+                new_pos[ColorE] = 0
+            elif self.neigh_index == 3:
+                new_pos[IE] = pos[IC]
+                new_pos[JE] = pos[JC]
+                new_pos[ColorE] = 1
+            else:
+                raise IndexError("offset not defined")
+
+            return new_pos
+        return pos
+
+
+def test_direct():
+    inp = np_as_located_field(IE, JE, ColorE)(
+        np.asarray(
+            [
+                [[0, 3], [1, 4], [2, 5], [-1, 6]],
+                [[7, 10], [8, 11], [9, 12], [-1, 13]],
+                [[14, 17], [15, 18], [16, 19], [-1, 20]],
+                [[21, -1], [22, -1], [23, -1], [-1, -1]],
+            ]
+        )
+    )
+    out = np_as_located_field(IC, JC)(np.zeros([3, 3]))
+
+    ref = np.asarray(list(sum(row) for row in c2e_tbl)).reshape(3, 3)
+
+    apply_stencil(
+        edges_to_cell(C2E_strided), {IC: range(3), JC: range(3)}, [inp], [out]
+    )
+    assert np.allclose(ref, np.asarray(out))
