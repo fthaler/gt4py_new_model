@@ -592,6 +592,22 @@ def test_nabla():
 
 ### indirect vs direct addressing
 
+
+def edges_to_cell(C2E):
+    def variant(inp):
+        acc = shift(inp, C2E[:])
+        return reduce(acc)
+
+        return (
+            deref(shift(inp, C2E(0)))
+            + deref(shift(inp, C2E(1)))
+            + deref(shift(inp, C2E(2)))
+            + deref(shift(inp, C2E(3)))
+        )
+
+    return variant
+
+
 # Cells
 # 0 1 2
 # 3 4 5
@@ -622,18 +638,6 @@ c2e_tbl = [
 ]
 
 
-def edges_to_cell(C2E):
-    def variant(inp):
-        return (
-            deref(shift(inp, C2E(0)))
-            + deref(shift(inp, C2E(1)))
-            + deref(shift(inp, C2E(2)))
-            + deref(shift(inp, C2E(3)))
-        )
-
-    return variant
-
-
 class C2E_indirect:
     def __init__(self, neigh_index) -> None:
         self.neigh_index = neigh_index
@@ -641,8 +645,8 @@ class C2E_indirect:
     def __call__(self, pos: Dict) -> Dict:
         if Cell in pos.keys():
             new_pos = pos.copy()
-            new_pos[Edge] = c2e_tbl[new_pos[Cell]][self.neigh_index]
             del new_pos[Cell]
+            new_pos[Edge] = c2e_tbl[pos[Cell]][self.neigh_index]
             return new_pos
         return pos
 
