@@ -12,6 +12,7 @@ from unstructured.concepts import (
     AbsoluteIndex,
     NeighborTableOffset,
     OffsetGroup,
+    RandomAccessOffset,
     RelativeIndex,
     StridedOffset,
 )
@@ -33,9 +34,13 @@ def get_order_indices(axises, pos):
 
 
 def _shift_impl(pos, offset):
-    # if isinstance(offset, OffsetGroup):
-    #     ...
-    if isinstance(offset, NeighborTableOffset):
+    if isinstance(offset, OffsetGroup):
+        new_pos = pos.copy()
+        offset_group_list = pos[NeighborAxis] if NeighborAxis in pos else []
+        offset_group_list.append(offset)
+        new_pos[NeighborAxis] = offset_group_list
+        return new_pos
+    elif isinstance(offset, NeighborTableOffset):
         if offset.consumed_location in pos.keys():
             new_pos = pos.copy()
             del new_pos[offset.consumed_location]
@@ -58,6 +63,13 @@ def _shift_impl(pos, offset):
                 )
             return new_pos
         return pos
+    elif isinstance(offset, RandomAccessOffset):
+        if not NeighborAxis in pos.keys():
+            raise IndexError("Cannot be shifted with RandomAccessOffset")
+        else:
+            new_pos = pos.copy()
+            last_offset_group = new_pos[NeighborAxis].pop()
+            return _shift_impl(new_pos, last_offset_group.offsets[offset.i])
     elif callable(offset):  # fallback, to be removed
         return offset(pos)
     else:
@@ -651,36 +663,20 @@ def test_nabla():
 ### indirect vs direct addressing
 
 
-class NeighborAxis:
-    # the value in the pos dict for NeighborAxis is a list of OffsetGroups
-    ...
-
-
-@dataclass(frozen=True)
-class nth:
-    i: int
-
-    def __call__(self, pos):
-        if not NeighborAxis in pos.keys():
-            raise IndexError("Cannot be shifted with nth")
-        else:
-            # TODO
-            ...
-
-
 def reduce(fun, init):
-    def sten(**iters):
+    def sten(*iters):
+        print(iters)
         # assert check_that_all_iterators_are_compatible(*iters)
-        first_arg = iter[0]
+        first_arg = iters[0]
         # n = get_maximum_number_of_neigbors_from_iterator(first_arg)
         n = 4  # TODO
         res = init
         for i in range(n):
             # we can check a single argument
             # because all arguments share the same pattern
-            if deref(shift(first_arg, nth(i))) is None:
+            if deref(shift(first_arg, RandomAccessOffset(i))) is None:
                 break
-            res = fun(res, *(deref(shift(i, nth(i))) for i in iters))
+            res = fun(res, *(deref(shift(it, RandomAccessOffset(i))) for it in iters))
         return res
 
     return sten
@@ -688,15 +684,15 @@ def reduce(fun, init):
 
 def edges_to_cell(C2E):
     def variant(inp):
-        # acc = shift(inp, C2E[:])
-        # return reduce(acc)
+        acc = shift(inp, C2E)
+        return reduce(lambda a, b: a + b, 0.0)(acc)
 
-        return (
-            deref(shift(inp, C2E(0)))
-            + deref(shift(inp, C2E(1)))
-            + deref(shift(inp, C2E(2)))
-            + deref(shift(inp, C2E(3)))
-        )
+        # return (
+        #     deref(shift(inp, C2E(0)))
+        #     + deref(shift(inp, C2E(1)))
+        #     + deref(shift(inp, C2E(2)))
+        #     + deref(shift(inp, C2E(3)))
+        # )
 
     return variant
 

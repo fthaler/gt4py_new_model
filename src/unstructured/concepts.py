@@ -83,16 +83,6 @@ class NeighborTableOffset:
     new_location: Any
     consumed_location: Any
 
-    # def __call__(self, pos):
-    #     if self.consumed_location in pos.keys():
-    #         new_pos = pos.copy()
-    #         del new_pos[self.consumed_location]
-    #         new_pos[self.new_location] = self.neighbor_table[
-    #             pos[self.consumed_location]
-    #         ][self.i]
-    #         return new_pos
-    #     return pos
-
 
 @dataclass(frozen=True)
 class StridedOffset:
@@ -107,35 +97,15 @@ class StridedOffset:
     remap: dict
     consumed_locations: list
 
-    # this is the implementation for my python embedded execution
-    # def __call__(self, pos):
-    #     if all(loc in pos.keys() for loc in self.consumed_locations):
-    #         new_pos = pos.copy()
-    #         for loc in self.consumed_locations:
-    #             del new_pos[loc]
-
-    #         for new_loc, offset in self.remap.items():
-    #             new_pos[new_loc] = (
-    #                 offset.i
-    #                 if isinstance(offset, AbsoluteIndex)
-    #                 else pos[offset.location] + offset.i
-    #             )
-    #         return new_pos
-    #     return pos
-
 
 @dataclass(frozen=True)
 class OffsetGroup:  # e.g. V2E
     offsets: list
 
-    def __call__(self, index=None):
-        if index is None:
-            # normal mode
-            assert False
-        else:
-            # special mode that does shift to a concrete element of the OffsetGroup
-            return self.offsets[index]
-            # def impl(pos):
-            #     return self.offsets[index](pos)
+    def __call__(self, index):  # frontend feature
+        return self.offsets[index]
 
-            # return impl
+
+class NeighborAxis:
+    # the value in the pos dict for NeighborAxis is a list of OffsetGroups
+    ...
