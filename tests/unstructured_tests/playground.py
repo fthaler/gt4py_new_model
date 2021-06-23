@@ -34,6 +34,7 @@ def get_order_indices(axises, pos):
 
 
 def _shift_impl(pos, offset):
+    # TODO Nones missing for non existent neighbors
     if isinstance(offset, OffsetGroup):
         new_pos = pos.copy()
         offset_group_list = pos[NeighborAxis] if NeighborAxis in pos else []
@@ -84,6 +85,9 @@ class MDIterator:
 
     def shift(self, offset):
         return MDIterator(self.field, self.pos, offsets=[*self.offsets, offset])
+
+    def get_max_number_of_neighbors(self):
+        return len(self.get_shifted_pos()[NeighborAxis][-1].offsets)
 
     def get_shifted_pos(self):
         shifted_pos = self.pos
@@ -149,6 +153,12 @@ def lift(stencil):
 
             def shift(self, offset):
                 return wrap_iterator(offsets=[*self.offsets, offset])
+
+            def get_max_number_of_neighbors(self):
+                for o in reversed(self.offsets):
+                    if isinstance(o, OffsetGroup):
+                        return len(o.offsets)
+                raise RuntimeError("Error")
 
             def deref(self):
                 shifted_args = args
@@ -661,7 +671,8 @@ def test_nabla():
 
 
 def get_maximum_number_of_neighbors_from_iterator(iter):
-    return len(iter.get_shifted_pos()[NeighborAxis][-1].offsets)
+    return iter.get_max_number_of_neighbors()
+    # return len(iter.get_shifted_pos()[NeighborAxis][-1].offsets)
 
 
 def reduce(fun, init):
@@ -725,6 +736,18 @@ c2e_tbl = [
     [16, 20, 23, 19],
 ]
 
+c2c_tbl = [
+    [1, 3, -1, -1],
+    [2, 4, 4, -1],
+    [5, 1, -1, -1],
+    [0, 4, 6, -1],
+    [1, 5, 7, 3],
+    [2, 8, 4, -1],
+    [3, 7, -1, -1],
+    [4, 8, 6, -1],
+    [5, 7, -1, -1],
+]
+
 
 C2E_indirect = OffsetGroup(
     offsets=[
@@ -733,6 +756,17 @@ C2E_indirect = OffsetGroup(
             neighbor_table=c2e_tbl,
             consumed_location=Cell,
             new_location=Edge,
+        )
+        for neigh_index in range(4)
+    ]
+)
+C2C_indirect = OffsetGroup(
+    offsets=[
+        NeighborTableOffset(
+            i=neigh_index,
+            neighbor_table=c2c_tbl,
+            consumed_location=Cell,
+            new_location=Cell,
         )
         for neigh_index in range(4)
     ]
@@ -826,6 +860,32 @@ def test_direct():
         edges_to_cell(C2E_strided), {IC: range(3), JC: range(3)}, [inp], [out]
     )
     assert np.allclose(ref, np.asarray(out))
+
+
+def edges_to_cell_to_cell(C2E, C2C):
+    def variant(inp):
+        c2es = shift(inp, C2E)
+        c2e_sum = lift(reduce(lambda a, b: a + b, 0.0))(c2es)
+        c2cs = shift(c2e_sum, C2C)
+        return reduce(lambda a, b: a + b, 0.0)(c2cs)
+
+    return variant
+
+
+def test_lifted_reduction():
+    inp = np_as_located_field(Edge)(np.asarray(list(range(24))))
+    out = np_as_located_field(Cell)(np.zeros([9]))
+
+    e2c_sum = list(sum(row) for row in c2e_tbl)
+    ref = np.asarray([e2c_sum[1] + e2c_sum[3] + e2c_sum[5] + e2c_sum[7]])
+
+    apply_stencil(
+        edges_to_cell_to_cell(C2E_indirect, C2C_indirect),
+        {Cell: range(4, 5)},
+        [inp],
+        [out],
+    )
+    assert np.allclose(ref, np.asarray(out)[4])
 
 
 def first_element_of_sparse_field(inp):
