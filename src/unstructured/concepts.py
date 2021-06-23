@@ -11,354 +11,131 @@
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-import operator
-import itertools
-from numbers import Number
+from dataclasses import dataclass
+from typing import Any
 import numpy as np
 
-from unstructured.utils import (
-    Dimension,
-    axis,
-    combine_dimensions,
-    dimensions_compatible,
-    get_dimension_of_type,
-    order_dimensions,
-    remove_axises_from_dimensions,
-    remove_indices_of_axises,
-    tupelize,
-    split_indices,
-)
+
+class _Shifter:
+    @classmethod
+    def shift(*args):
+        raise RuntimeError("shift was not properly overwritten")
+
+    def __call__(self, *args):
+        _Shifter.shift(*args)
 
 
-@axis()
-class TupleDim__:
-    """Builtin axis that can be unpacked"""
+shift = _Shifter()
 
+
+def shift_impl():
     ...
 
 
-def make_field(element_access, bind_indices, dimensions, element_type):
-    dimensions = tupelize(dimensions)
+def apply_stencil(stencil, offsets):
+    def real_shift(*args):
+        for arg in args:
+            print(f"{arg}: {offsets[arg]}")
 
-    class _field(Field):
-        def __init__(self):
-            self.element_type = element_type
-            self.dimensions = remove_axises_from_dimensions(
-                (type(i) for i in bind_indices), dimensions
-            )
+    _Shifter.shift = real_shift
 
-        def __getitem__(self, indices):
-            if isinstance(indices, Field):
-                return field_getitem(self, indices)
-
-            else:
-                indices = tupelize(indices)
-                if len(indices) == len(self.dimensions):
-                    return element_access(bind_indices + indices)
-                else:
-                    # field with `indices` bound
-                    return make_field(
-                        element_access, indices, self.dimensions, element_type
-                    )
-
-        def __iter__(self):
-            assert TupleDim__ in (dim.axis for dim in self.dimensions)
-
-            def make_tuple_acc(i):
-                @element_access_to_field(
-                    dimensions=remove_axises_from_dimensions(
-                        (TupleDim__,), self.dimensions
-                    ),
-                    element_type=self.element_type,
-                )
-                def tuple_acc(indices):
-                    return self[TupleDim__(i)][indices]
-
-                return tuple_acc
-
-            tuple_range = tuple(
-                dim.range for dim in self.dimensions if dim.axis == TupleDim__
-            )[0]
-
-            return iter(map(lambda i: make_tuple_acc(i), tuple_range))
-
-    return _field()
+    stencil()
 
 
-def element_access_to_field(*, dimensions, element_type):
-    def _fun(element_access):
-        return make_field(element_access, tuple(), dimensions, element_type)
-
-    return _fun
+def sten2():
+    shift("test2")
 
 
-def field_getitem(field, index_field):
-    assert index_field.element_type is not None
-    if index_field.element_type is None:
-        raise TypeError("Is not an index field, missing element type.")
-    if not index_field.element_type in [dim.axis for dim in field.dimensions]:
-        raise TypeError("Incompatible index field passed.")
+def sten():
+    sten2()
+    shift("test")
 
-    @element_access_to_field(
-        dimensions=(
-            remove_axises_from_dimensions((index_field.element_type,), field.dimensions)
-            + index_field.dimensions
-        ),
-        element_type=field.element_type,
+
+apply_stencil(sten, {"test": 1, "test2": 5})
+
+## Offset providers
+
+
+@dataclass(frozen=True)
+class AbsoluteIndex:
+    i: int
+
+
+@dataclass(frozen=True)
+class RelativeIndex:
+    location: str
+    i: int
+
+
+class Offset:
+    ...
+
+
+@dataclass(frozen=True)
+class RandomAccessOffset(Offset):  # aka nth(i)
+    i: int
+
+
+@dataclass(frozen=True)
+class NeighborTableOffset:
+    i: int  # neighbor id
+    neighbor_table: np.array
+    new_location: Any
+    consumed_location: Any
+
+    # def __call__(self, pos):
+    #     if self.consumed_location in pos.keys():
+    #         new_pos = pos.copy()
+    #         del new_pos[self.consumed_location]
+    #         new_pos[self.new_location] = self.neighbor_table[
+    #             pos[self.consumed_location]
+    #         ][self.i]
+    #         return new_pos
+    #     return pos
+
+
+@dataclass(frozen=True)
+class StridedOffset:
+    """
+    Example
+
+    C2E_0 = StridedOffset(remap={'IE': RelativeOffset(location='IC', offset=0), 'JE': RelativeOffset(location='JC', offset=0), 'ColorE': AbsoluteIndex(i=0)},
+        consumed_locations={'IC', 'JC'}
     )
-    def element_access(indices):
-        index_field_indices, rest = split_indices(
-            indices, tuple(dim.axis for dim in index_field.dimensions)
-        )
-        new_index = index_field[index_field_indices]
-        if new_index is not None:
-            return field[(new_index,) + rest]
+    """
+
+    remap: dict
+    consumed_locations: list
+
+    # this is the implementation for my python embedded execution
+    # def __call__(self, pos):
+    #     if all(loc in pos.keys() for loc in self.consumed_locations):
+    #         new_pos = pos.copy()
+    #         for loc in self.consumed_locations:
+    #             del new_pos[loc]
+
+    #         for new_loc, offset in self.remap.items():
+    #             new_pos[new_loc] = (
+    #                 offset.i
+    #                 if isinstance(offset, AbsoluteIndex)
+    #                 else pos[offset.location] + offset.i
+    #             )
+    #         return new_pos
+    #     return pos
+
+
+@dataclass(frozen=True)
+class OffsetGroup:  # e.g. V2E
+    offsets: list
+
+    def __call__(self, index=None):
+        if index is None:
+            # normal mode
+            assert False
         else:
-            return None
+            # special mode that does shift to a concrete element of the OffsetGroup
+            return self.offsets[index]
+            # def impl(pos):
+            #     return self.offsets[index](pos)
 
-    return element_access
-
-
-class _FieldArithmetic:
-    SUPPORTED_OPS = [
-        "__mul__",
-        "__add__",
-        "__sub__",
-        "__truediv__",
-        "__gt__",
-        "__lt__",
-        "__or__",
-        "__and__",
-        "__eq__",
-        "__ne__",
-    ]
-    SUPPORTED_REVERSE_OPS = ["__rmul__", "__radd__"]
-
-    @staticmethod
-    def _field_op(op):
-        def fun(first, second):
-            if isinstance(second, Field):
-                # assert axises_eq(
-                #     first.axises, second.axises
-                # ), f"first=[{[str(i(0)) for i in first.axises]}, second={[str(i(0)) for i in second.axises]}"  # TODO order independant
-                assert dimensions_compatible(first.dimensions, second.dimensions)
-                if first.element_type is not None and second.element_type is not None:
-                    assert first.element_type == second.element_type
-                combined_dimensions = combine_dimensions(
-                    first.dimensions, second.dimensions
-                )
-            else:
-                combined_dimensions = first.dimensions
-
-            class _field(Field):
-                dimensions = combined_dimensions
-                element_type = first.element_type
-
-                def __getitem__(self, index):
-                    if isinstance(second, Field):
-                        second_value = second[index]
-                    elif isinstance(second, Number):
-                        second_value = second
-                    else:
-                        raise ValueError()
-
-                    if first[index] is not None and second_value is not None:
-                        return op(first[index], second_value)
-                    else:
-                        return None
-
-            # if hasattr(first, "__len__") and hasattr(second, "__len__"):
-            #     assert len(first) == len(second)
-            #     setattr(_field, "__len__", first.__len__)
-            return _field()
-
-        return fun
-
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
-
-        attr_to_op = {op: op for op in cls.SUPPORTED_OPS}
-        attr_to_op |= {op: op.replace("__r", "__") for op in cls.SUPPORTED_REVERSE_OPS}
-        for attr, op in attr_to_op.items():
-            setattr(
-                cls,
-                attr,
-                lambda self, other, op=op: self._field_op(getattr(operator, op))(
-                    self, other
-                ),
-            )
-
-
-class Field(_FieldArithmetic):
-    def __array__(self, dtype=None):
-        # TODO dtype
-        ranges = [dim.range for dim in self.dimensions]
-        types = [dim.axis for dim in self.dimensions]
-        shape = [len(dim.range) for dim in self.dimensions]
-
-        # TODO support ranges that don't start from zero
-        assert all((r.start == 0 for r in ranges))
-
-        res = np.zeros(shape)
-        for indices in itertools.product(*ranges):
-            typed_indices = tuple(map(lambda i_t: i_t[1](i_t[0]), zip(indices, types)))
-            res[indices] = self[typed_indices]
-
-        return res
-
-    def array_of(self, *axises):
-        # TODO assert all axises are in self.dimensions
-
-        @element_access_to_field(
-            dimensions=order_dimensions(self.dimensions, axises),
-            element_type=self.element_type,
-        )
-        def elem_acc(indices):
-            return self[indices]
-
-        return elem_acc
-
-
-def if_(cond, true_branch, false_branch):
-    assert isinstance(cond, Field)
-    assert isinstance(true_branch, Field)
-    assert isinstance(false_branch, Field)
-
-    assert dimensions_compatible(true_branch.dimensions, false_branch.dimensions)
-    assert dimensions_compatible(cond.dimensions, true_branch.dimensions)
-    if true_branch.element_type is not None and false_branch.element_type is not None:
-        assert true_branch.element_type == false_branch.element_type
-        element_type = true_branch.element_type
-    else:
-        element_type = None
-
-    @element_access_to_field(
-        dimensions=combine_dimensions(
-            cond.dimensions,
-            combine_dimensions(true_branch.dimensions, false_branch.dimensions),
-        ),
-        element_type=element_type,
-    )
-    def elem_acc(indices):
-        return true_branch[indices] if cond[indices] else false_branch[indices]
-
-    return elem_acc
-
-
-def reduce(op, init):
-    def _red_dim(dim):
-        def _reduce(field):
-            @element_access_to_field(
-                dimensions=remove_axises_from_dimensions((dim,), field.dimensions),
-                element_type=field.element_type,
-            )
-            def elem_access(indices):
-                indices = tupelize(indices)
-                reduction_range = get_dimension_of_type(dim)(field.dimensions).range
-                res = init
-                for i in reduction_range:
-                    val = field[(dim(i),) + indices]
-                    if val is not None:
-                        res = op(res, val)
-                return res
-
-            return elem_access
-
-        return _reduce
-
-    return _red_dim
-
-
-def sum_reduce(dim):
-    return reduce(operator.add, 0)(dim)
-
-
-def broadcast(*axises):
-    def _impl(field):
-        @element_access_to_field(
-            dimensions=field.dimensions + tuple(Dimension(dim, None) for dim in axises),
-            element_type=field.element_type,
-        )
-        def elem_access(indices):
-            return field[remove_indices_of_axises(axises, indices)]
-
-        return elem_access
-
-    return _impl
-
-
-def apply_stencil(stencil, domain, connectivities_and_in_fields, out):
-    ranges, types = tuple(zip(*domain))
-
-    for indices in itertools.product(*ranges):
-        fields = tupelize(stencil(*connectivities_and_in_fields))
-        assert len(fields) == len(out)
-
-        for o, f in zip(out, fields):
-            typed_indices = tuple(map(lambda i_t: i_t[1](i_t[0]), zip(indices, types)))
-            o[indices] = f[typed_indices]
-
-
-def generic_scan(axis, fun, *, backward):
-    def scanner(*inps):
-        # TODO assert all inp have the same axises
-        dimensions = inps[0].dimensions
-
-        def make_elem_access(tuple_size):
-            new_dimensions = (
-                dimensions
-                if tuple_size is None
-                else dimensions + (Dimension(TupleDim__, range(tuple_size)),)
-            )
-
-            @element_access_to_field(
-                dimensions=new_dimensions,
-                element_type=inps[0].element_type,
-            )
-            def elem_acc(indices):
-                scan_index, rest = split_indices(indices, (axis,))
-                scan_dimension = get_dimension_of_type(axis)(dimensions)
-                assert len(scan_index) == 1
-
-                state = None
-
-                if not backward:
-                    iter = list(range(scan_index[0].__index__() + 1))
-                else:
-                    iter = list(scan_dimension.range[scan_index[0] :])
-                    iter.reverse()
-                for ind in map(lambda i: axis(i), iter):
-                    state = fun(state, *tuple(inp[ind] for inp in inps))
-
-                if tuple_size is None:
-                    return state[rest]
-                else:
-                    tuple_index, rest = split_indices(rest, (TupleDim__,))
-                    assert len(tuple_index) == 1
-                    tuple_index = tuple_index[0]
-                    return state[tuple_index.__index__()][rest]
-
-            return elem_acc
-
-        # try what the result of fun is (tuple or value):
-        res_check = fun(None, *tuple(inp[axis(0)] for inp in inps))
-        return make_elem_access(
-            None if not isinstance(res_check, tuple) else len(res_check)
-        )
-
-    return scanner
-
-
-def scan_pass(axis, *, backward=False):
-    def impl(fun):
-        return generic_scan(axis, fun, backward=backward)
-
-    return impl
-
-
-def forward_scan(axis):
-    return scan_pass(axis, backward=False)
-
-
-def backward_scan(axis):
-    return scan_pass(axis, backward=True)
+            # return impl

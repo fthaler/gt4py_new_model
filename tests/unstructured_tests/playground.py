@@ -7,6 +7,14 @@
 # GeneralizedOffset is a callable that takes pos and returns new pos
 
 
+from dataclasses import dataclass
+from unstructured.concepts import (
+    AbsoluteIndex,
+    NeighborTableOffset,
+    OffsetGroup,
+    RelativeIndex,
+    StridedOffset,
+)
 from .fvm_nabla_setup import assert_close, nabla_setup
 from typing import Callable, Dict
 import numpy as np
@@ -24,6 +32,38 @@ def get_order_indices(axises, pos):
     return tuple(slice(None) if axis is ExtraDim else pos[axis] for axis in axises)
 
 
+def _shift_impl(pos, offset):
+    # if isinstance(offset, OffsetGroup):
+    #     ...
+    if isinstance(offset, NeighborTableOffset):
+        if offset.consumed_location in pos.keys():
+            new_pos = pos.copy()
+            del new_pos[offset.consumed_location]
+            new_pos[offset.new_location] = offset.neighbor_table[
+                pos[offset.consumed_location]
+            ][offset.i]
+            return new_pos
+        return pos
+    elif isinstance(offset, StridedOffset):
+        if all(loc in pos.keys() for loc in offset.consumed_locations):
+            new_pos = pos.copy()
+            for loc in offset.consumed_locations:
+                del new_pos[loc]
+
+            for new_loc, new_offset in offset.remap.items():
+                new_pos[new_loc] = (
+                    new_offset.i
+                    if isinstance(new_offset, AbsoluteIndex)
+                    else pos[new_offset.location] + new_offset.i
+                )
+            return new_pos
+        return pos
+    elif callable(offset):  # fallback, to be removed
+        return offset(pos)
+    else:
+        raise NotImplementedError("The given offset is not supported.")
+
+
 class MDIterator:
     def __init__(self, field, pos, *, offsets=[]) -> None:
         self.field = field
@@ -38,7 +78,7 @@ class MDIterator:
         if shifted_pos is None:
             return True
         for offset in self.offsets:
-            shifted_pos = offset(shifted_pos)
+            shifted_pos = _shift_impl(shifted_pos, offset)
             if shifted_pos is None:
                 return True
         return False
@@ -48,7 +88,7 @@ class MDIterator:
         if shifted_pos is None:
             return None
         for offset in self.offsets:
-            shifted_pos = offset(shifted_pos)
+            shifted_pos = _shift_impl(shifted_pos, offset)
             if shifted_pos is None:
                 return None
 
@@ -130,9 +170,27 @@ def domain_iterator(domain):
     )
 
 
+def _get_neighbor_axis(axises):
+    for axis in axises:
+        if isinstance(axis, tuple):
+            return axis
+    return None
+
+
+def make_in_iterator(inp, pos):
+    neighbor_axis = _get_neighbor_axis(inp.axises)
+    if neighbor_axis is None:
+        return MDIterator(inp, pos)
+    else:
+        new_pos = pos.copy()
+        new_pos[neighbor_axis] = 0
+        return MDIterator(inp, new_pos)
+
+
 def apply_stencil(sten, domain, ins, outs):  # domain is Dict[axis, range]
     for pos in domain_iterator(domain):
-        ins_iters = list(MDIterator(inp, pos) for inp in ins)
+        # ins_iters = list(MDIterator(inp, pos) for inp in ins)
+        ins_iters = list(make_in_iterator(inp, pos) for inp in ins)
         res = sten(*ins_iters)
         if not isinstance(res, tuple):
             res = (res,)
@@ -593,10 +651,45 @@ def test_nabla():
 ### indirect vs direct addressing
 
 
+class NeighborAxis:
+    # the value in the pos dict for NeighborAxis is a list of OffsetGroups
+    ...
+
+
+@dataclass(frozen=True)
+class nth:
+    i: int
+
+    def __call__(self, pos):
+        if not NeighborAxis in pos.keys():
+            raise IndexError("Cannot be shifted with nth")
+        else:
+            # TODO
+            ...
+
+
+def reduce(fun, init):
+    def sten(**iters):
+        # assert check_that_all_iterators_are_compatible(*iters)
+        first_arg = iter[0]
+        # n = get_maximum_number_of_neigbors_from_iterator(first_arg)
+        n = 4  # TODO
+        res = init
+        for i in range(n):
+            # we can check a single argument
+            # because all arguments share the same pattern
+            if deref(shift(first_arg, nth(i))) is None:
+                break
+            res = fun(res, *(deref(shift(i, nth(i))) for i in iters))
+        return res
+
+    return sten
+
+
 def edges_to_cell(C2E):
     def variant(inp):
-        acc = shift(inp, C2E[:])
-        return reduce(acc)
+        # acc = shift(inp, C2E[:])
+        # return reduce(acc)
 
         return (
             deref(shift(inp, C2E(0)))
@@ -638,17 +731,17 @@ c2e_tbl = [
 ]
 
 
-class C2E_indirect:
-    def __init__(self, neigh_index) -> None:
-        self.neigh_index = neigh_index
-
-    def __call__(self, pos: Dict) -> Dict:
-        if Cell in pos.keys():
-            new_pos = pos.copy()
-            del new_pos[Cell]
-            new_pos[Edge] = c2e_tbl[pos[Cell]][self.neigh_index]
-            return new_pos
-        return pos
+C2E_indirect = OffsetGroup(
+    offsets=[
+        NeighborTableOffset(
+            i=neigh_index,
+            neighbor_table=c2e_tbl,
+            consumed_location=Cell,
+            new_location=Edge,
+        )
+        for neigh_index in range(4)
+    ]
+)
 
 
 def test_indirect():
@@ -681,37 +774,42 @@ class JC:
     ...
 
 
-class C2E_strided:
-    def __init__(self, neigh_index) -> None:
-        self.neigh_index = neigh_index
-
-    def __call__(self, pos: Dict) -> Dict:
-        if IC in pos.keys() and JC in pos.keys():
-            new_pos = pos.copy()
-            del new_pos[IC]
-            del new_pos[JC]
-
-            if self.neigh_index == 0:
-                new_pos[IE] = pos[IC]
-                new_pos[JE] = pos[JC]
-                new_pos[ColorE] = 0
-            elif self.neigh_index == 1:
-                new_pos[IE] = pos[IC]
-                new_pos[JE] = pos[JC] + 1
-                new_pos[ColorE] = 1
-            elif self.neigh_index == 2:
-                new_pos[IE] = pos[IC] + 1
-                new_pos[JE] = pos[JC]
-                new_pos[ColorE] = 0
-            elif self.neigh_index == 3:
-                new_pos[IE] = pos[IC]
-                new_pos[JE] = pos[JC]
-                new_pos[ColorE] = 1
-            else:
-                raise IndexError("offset not defined")
-
-            return new_pos
-        return pos
+C2E_strided = OffsetGroup(
+    offsets=[
+        StridedOffset(
+            remap={
+                IE: RelativeIndex(location=IC, i=0),
+                JE: RelativeIndex(location=JC, i=0),
+                ColorE: AbsoluteIndex(i=0),
+            },
+            consumed_locations=[IC, JC],
+        ),
+        StridedOffset(
+            remap={
+                IE: RelativeIndex(location=IC, i=0),
+                JE: RelativeIndex(location=JC, i=1),
+                ColorE: AbsoluteIndex(i=1),
+            },
+            consumed_locations=[IC, JC],
+        ),
+        StridedOffset(
+            remap={
+                IE: RelativeIndex(location=IC, i=1),
+                JE: RelativeIndex(location=JC, i=0),
+                ColorE: AbsoluteIndex(i=0),
+            },
+            consumed_locations=[IC, JC],
+        ),
+        StridedOffset(
+            remap={
+                IE: RelativeIndex(location=IC, i=0),
+                JE: RelativeIndex(location=JC, i=0),
+                ColorE: AbsoluteIndex(i=1),
+            },
+            consumed_locations=[IC, JC],
+        ),
+    ]
+)
 
 
 def test_direct():
@@ -733,3 +831,129 @@ def test_direct():
         edges_to_cell(C2E_strided), {IC: range(3), JC: range(3)}, [inp], [out]
     )
     assert np.allclose(ref, np.asarray(out))
+
+
+def neigh_sum(inp):
+    # TODO
+    ...
+
+
+def first_element_of_sparse_field(inp):
+    return deref(inp)
+    # return sum(v for v in inp)
+
+
+class SomeDim:
+    ...
+
+
+class DataDimension:
+    ...
+
+
+class NeighborAxis(CartesianAxis):
+    ...
+
+
+class SomeNeighbor(DataDimension):
+    ...
+
+
+def test_sparse_field():
+    inp = np_as_located_field(SomeDim, ((SomeNeighbor, range(2)),))(
+        np.asarray([[0, 1], [2, 3], [4, 5], [6, 7]])
+    )
+
+    out = np_as_located_field(SomeDim)(np.zeros([4]))
+
+    apply_stencil(first_element_of_sparse_field, {SomeDim: range(4)}, [inp], [out])
+
+    assert np.allclose([0, 2, 4, 6], np.asarray(out))
+
+
+# TODO nested reduction
+# a = reduce_over(Edge > Cell,
+#                b*reduce_over(Cell > Vertex, c, sum, init=0.0),
+#             sum, init=0.0)
+
+
+# def shiftn(it: Iterator[Axises,T], o: OffsetRange) -> Iterator[(*Axises,OffsetRange), T]:
+#     ...
+
+
+# def sum(
+#     it: Iterator[(*Axises, OffsetRange), T], o: OffsetRange
+# ) -> Iterator[Axises, T]:
+
+#     def result():
+#         res = 0
+#         for n in len(OffsetRange):
+#             cur = deref(it)
+#             if cur is not None:
+#                 res += cur
+#             shift(it, OffsetRange(1))
+#         return res
+
+#     return Iterator(pos=it.pos.remove(OffsetRange), field=result)
+
+
+## Thoughts
+# - we want to keep the chain of neighbors (aka offset range),
+#   because we need it for execution: it makes the link to the neighbor table which contains where `None`s are
+#   (otherwise we would have one mask per field)
+# - if we have `reduce` (instead of unrolled) in the IR, we can make it the only place to deal with `Optional`s,
+#   i.e. we can require that `shift` is only possible to a non-optional location
+
+## Use case: nested reduction
+
+# a = reduce_over(Edge > Cell,
+#                b*reduce_over(Cell > Vertex, c, sum, init=0.0),
+#             sum, init=0.0)
+
+# a = deref(shift(E2C(0), b))*deref(shift(E2C(0), shift(C2V(0),c)))
+
+# "E2C0", "E2C0_C2V0"
+
+
+# def reduce( binop: Callable[T,T],
+#     it: Iterator[(*Axises, OffsetRange), T], o: OffsetRange
+# ) -> Iterator[Axises, T]:
+
+# def reduce(it_range, init: T, fun: [T, *U]) -> Stencil:
+#     def impl(*iters) -> Value:
+#         ...
+#     return impl
+
+# # - Do we need `map` operation?
+# #
+# # Possible implementations (sum is short for reduce with `add` binop)
+# # A) with map, zip; reduce returns iterator
+# sum(map(lambda a,b: a*b, zip(shiftn(E2C, b),shiftn(E2C, sum(shiftn(C2V, c), range=C2V)))))
+# # B)
+# reduce(forall(E2C), 0, lambda a,b,c: a+ b*c)(shift(b, E2C),shift(lift(reduce(forall(C2V), 0, lambda a,b: a+b))(shift(c, C2V)), E2C))
+# # if b is sparse field `shift(b, E2C)` -> `b`
+
+# edge_out = shift(v_field, "E2V(0)") + shift(v_field, "E2V(1)")
+
+# edge_out2 = shift(sparse_e2v, "SparseField(0)") + shift(sparse_e2v, "SparseField(1)")
+
+# sum_on_first_v_neig = deref(shift(shiftn(v_field, "E2V"), "SparseField(0)")) + deref(shift(sparse_e2v, "SparseField(0)"))
+
+# shiftn(E2V[:], inp)
+
+# shift(, shiftn([E2V(0), E2V(1), Diamond(4)])
+
+# # Built-Ins:
+# # - shift
+# # - shiftn ?
+# # - reduce
+# # def reduce(it_range, init: T, fun: [T, *U]) -> Stencil:
+# #    def impl(*iters) -> Value:
+# #        ...
+# #    return impl
+
+# ##########
+# def reduce(it_range, init: T, fun: [T, *U]) -> Stencil:
+#     def impl(*iters) -> Value:
+#         ...
+#     return impl
