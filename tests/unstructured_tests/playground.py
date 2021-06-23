@@ -85,17 +85,7 @@ class MDIterator:
     def shift(self, offset):
         return MDIterator(self.field, self.pos, offsets=[*self.offsets, offset])
 
-    def is_none(self):
-        shifted_pos = self.pos
-        if shifted_pos is None:
-            return True
-        for offset in self.offsets:
-            shifted_pos = _shift_impl(shifted_pos, offset)
-            if shifted_pos is None:
-                return True
-        return False
-
-    def deref(self):
+    def get_shifted_pos(self):
         shifted_pos = self.pos
         if shifted_pos is None:
             return None
@@ -103,6 +93,13 @@ class MDIterator:
             shifted_pos = _shift_impl(shifted_pos, offset)
             if shifted_pos is None:
                 return None
+        return shifted_pos
+
+    def is_none(self):
+        return self.get_shifted_pos() is None
+
+    def deref(self):
+        shifted_pos = self.get_shifted_pos()
 
         if not all(
             axis in [*shifted_pos.keys(), ExtraDim] for axis in self.field.axises
@@ -663,18 +660,20 @@ def test_nabla():
 ### indirect vs direct addressing
 
 
+def get_maximum_number_of_neighbors_from_iterator(iter):
+    return len(iter.get_shifted_pos()[NeighborAxis][-1].offsets)
+
+
 def reduce(fun, init):
     def sten(*iters):
-        print(iters)
         # assert check_that_all_iterators_are_compatible(*iters)
-        first_arg = iters[0]
-        # n = get_maximum_number_of_neigbors_from_iterator(first_arg)
-        n = 4  # TODO
+        first_it = iters[0]
+        n = get_maximum_number_of_neighbors_from_iterator(first_it)
         res = init
         for i in range(n):
             # we can check a single argument
             # because all arguments share the same pattern
-            if deref(shift(first_arg, RandomAccessOffset(i))) is None:
+            if deref(shift(first_it, RandomAccessOffset(i))) is None:
                 break
             res = fun(res, *(deref(shift(it, RandomAccessOffset(i))) for it in iters))
         return res
@@ -827,11 +826,6 @@ def test_direct():
         edges_to_cell(C2E_strided), {IC: range(3), JC: range(3)}, [inp], [out]
     )
     assert np.allclose(ref, np.asarray(out))
-
-
-def neigh_sum(inp):
-    # TODO
-    ...
 
 
 def first_element_of_sparse_field(inp):
