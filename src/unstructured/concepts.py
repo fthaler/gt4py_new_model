@@ -92,6 +92,9 @@ class StridedOffset:
     C2E_0 = StridedOffset(remap={'IE': RelativeOffset(location='IC', offset=0), 'JE': RelativeOffset(location='JC', offset=0), 'ColorE': AbsoluteIndex(i=0)},
         consumed_locations={'IC', 'JC'}
     )
+
+    "I+1" = StridedOffset(remap={'I': RelativeOffset(location='I', offset=1)}, consumed_location=['I'])
+    "I+0.5" = StridedOffset(remap={'IStag': RelativeOffset(location='I', offset=1)}, consumed_location=['I'])
     """
 
     remap: dict

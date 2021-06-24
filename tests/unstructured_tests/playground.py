@@ -21,6 +21,7 @@ from typing import Callable, Dict
 import numpy as np
 import pytest
 import itertools
+import inspect
 
 from unstructured.utils import tupelize
 
@@ -29,8 +30,27 @@ from .hdiff_reference import hdiff_reference
 # concepts
 
 
+class Color:
+    ...
+
+
+def get_color_key(axises):
+    for axis in axises:
+        if inspect.isclass(axis) and issubclass(axis, Color):
+            return axis
+    return None
+
+
 def get_order_indices(axises, pos):
-    return tuple(slice(None) if axis is ExtraDim else pos[axis] for axis in axises)
+    # there is a hacky contract that color index goes first...
+    color_axis = get_color_key(axises)
+    res = tuple()
+    if color_axis is not None:
+        color_index = pos[color_axis]
+        res = (color_index,)
+        axises = tuple(axis for axis in axises if axis != color_axis)
+    rest = tuple(slice(None) if axis is ExtraDim else pos[axis] for axis in axises)
+    return (*res, *rest)
 
 
 def _shift_impl(pos, offset):
@@ -260,6 +280,21 @@ def np_as_located_field(*axises, origin=None):
         return LocatedField(getter, axises, setter=setter, array=a.__array__)
 
     return _maker
+
+
+def located_fields_as_colored_field(color_axis, origin=None):
+    def impl(*located_fields):
+        assert all(located_fields[0].axises == l.axises for l in located_fields)
+        assert issubclass(color_axis, Color)
+        axises = (color_axis, *located_fields[0].axises)
+
+        def getter(indices):
+            color_index, *rest = indices
+            return located_fields[color_index][tuple(rest)]
+
+        return LocatedField(getter, axises)
+
+    return impl
 
 
 # tests
@@ -783,7 +818,7 @@ def test_indirect():
     assert np.allclose(ref, np.asarray(out))
 
 
-class ColorE:
+class ColorE(Color):
     ...
 
 
@@ -1007,3 +1042,70 @@ def test_sparse_field():
 #     def impl(*iters) -> Value:
 #         ...
 #     return impl
+
+
+# TODO sparse field
+# TODO colored execution
+
+# Cells
+# 0 1
+# 2 3
+
+# Edges
+#    0   1
+#  2   3   4
+#    5   6
+#  7   8   9
+#   10  11
+
+e2c_table = [
+    [0, -1],  # 0
+    [1, -1],
+    [0, -1],  # 2
+    [0, 1],
+    [1, -1],
+    [0, 2],  # 5
+    [1, 3],
+    [2, -1],  # 7
+    [2, 3],
+    [3, -1],
+    [2, -1],  # 9
+    [3, -1],
+]
+
+# edges have 2 colors, edge fields are tuples of fields of the 2 colors, the iteration space is
+# ({I: range(3), J: range(2)}, {I: range(2), J: range(3)})
+# shift to a location with multiple colors returns tuple of iterators (not sure about this anymore)
+
+# maybe just mark Color changes in the StridedOffset, then we can build the extent tree
+
+
+def test_colored_execution():
+    inp0 = np_as_located_field(IE, JE)(
+        np.asarray(
+            [
+                [0, 1, 2],
+                [7, 8, 9],
+                [14, 15, 16],
+                [21, 22, 23],
+            ]
+        )
+    )
+    inp1 = np_as_located_field(IE, JE)(
+        np.asarray(
+            [
+                [3, 4, 5, 6],
+                [10, 11, 12, 13],
+                [17, 18, 19, 20],
+            ]
+        )
+    )
+    inp = located_fields_as_colored_field(ColorE)(inp0, inp1)
+    out = np_as_located_field(IC, JC)(np.zeros([3, 3]))
+
+    ref = np.asarray(list(sum(row) for row in c2e_tbl)).reshape(3, 3)
+
+    apply_stencil(
+        edges_to_cell(C2E_strided), {IC: range(3), JC: range(3)}, [inp], [out]
+    )
+    assert np.allclose(ref, np.asarray(out))
