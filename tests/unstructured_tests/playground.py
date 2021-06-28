@@ -1108,6 +1108,45 @@ e2c_table = [
     [2, -1],  # 7
     [2, 3],
     [3, -1],
-    [2, -1],  # 9
+    [2, -1],  # 10
     [3, -1],
 ]
+
+# cell -> edge
+def test_colored_c2e():
+    # inp0 = np_as_located_field(IE, JE)(
+    #     np.asarray(
+    #         [
+    #             [0, 1, 2],
+    #             [7, 8, 9],
+    #             [14, 15, 16],
+    #             [21, 22, 23],
+    #         ]
+    #     )
+    # )
+    # inp1 = np_as_located_field(IE, JE)(
+    #     np.asarray(
+    #         [
+    #             [3, 4, 5, 6],
+    #             [10, 11, 12, 13],
+    #             [17, 18, 19, 20],
+    #         ]
+    #     )
+    # )
+    # inp = located_fields_as_colored_field(ColorE)(inp0, inp1)
+    # out = np_as_located_field(IC, JC)(np.zeros([3, 3]))
+
+    # ref = np.asarray(list(sum(row) for row in c2e_tbl)).reshape(3, 3)
+
+    domain = ({I: range(2), J: range(1, 2)}, {I: range(1, 2), J: range(2)})
+
+    # apply_stencil(
+    #     edges_to_cell(C2E_strided), {IC: range(3), JC: range(3)}, [inp], [out]
+    # )
+    # assert np.allclose(ref, np.asarray(out))
+
+
+c2v_table = [[0, 1, 4, 3], [1, 2, 4, 5], [3, 4, 7, 6], [4, 5, 8, 7]]
+
+
+# cell -> edge -> vertex sum
