@@ -876,25 +876,25 @@ C2E_strided = OffsetGroup(
 )
 
 
-def test_direct():
-    inp = np_as_located_field(IE, JE, ColorE)(
-        np.asarray(
-            [
-                [[0, 3], [1, 4], [2, 5], [-1, 6]],
-                [[7, 10], [8, 11], [9, 12], [-1, 13]],
-                [[14, 17], [15, 18], [16, 19], [-1, 20]],
-                [[21, -1], [22, -1], [23, -1], [-1, -1]],
-            ]
-        )
-    )
-    out = np_as_located_field(IC, JC)(np.zeros([3, 3]))
+# def test_direct():
+#     inp = np_as_located_field(IE, JE, ColorE)(
+#         np.asarray(
+#             [
+#                 [[0, 3], [1, 4], [2, 5], [-1, 6]],
+#                 [[7, 10], [8, 11], [9, 12], [-1, 13]],
+#                 [[14, 17], [15, 18], [16, 19], [-1, 20]],
+#                 [[21, -1], [22, -1], [23, -1], [-1, -1]],
+#             ]
+#         )
+#     )
+#     out = np_as_located_field(IC, JC)(np.zeros([3, 3]))
 
-    ref = np.asarray(list(sum(row) for row in c2e_tbl)).reshape(3, 3)
+#     ref = np.asarray(list(sum(row) for row in c2e_tbl)).reshape(3, 3)
 
-    apply_stencil(
-        edges_to_cell(C2E_strided), {IC: range(3), JC: range(3)}, [inp], [out]
-    )
-    assert np.allclose(ref, np.asarray(out))
+#     apply_stencil(
+#         edges_to_cell(C2E_strided), {IC: range(3), JC: range(3)}, [inp], [out]
+#     )
+#     assert np.allclose(ref, np.asarray(out))
 
 
 def edges_to_cell_to_cell(C2E, C2C):
@@ -1051,27 +1051,6 @@ def test_sparse_field():
 # 0 1
 # 2 3
 
-# Edges
-#    0   1
-#  2   3   4
-#    5   6
-#  7   8   9
-#   10  11
-
-e2c_table = [
-    [0, -1],  # 0
-    [1, -1],
-    [0, -1],  # 2
-    [0, 1],
-    [1, -1],
-    [0, 2],  # 5
-    [1, 3],
-    [2, -1],  # 7
-    [2, 3],
-    [3, -1],
-    [2, -1],  # 9
-    [3, -1],
-]
 
 # edges have 2 colors, edge fields are tuples of fields of the 2 colors, the iteration space is
 # ({I: range(3), J: range(2)}, {I: range(2), J: range(3)})
@@ -1109,3 +1088,26 @@ def test_colored_execution():
         edges_to_cell(C2E_strided), {IC: range(3), JC: range(3)}, [inp], [out]
     )
     assert np.allclose(ref, np.asarray(out))
+
+
+# Edges
+#    0   1
+#  2   3   4
+#    5   6
+#  7   8   9
+#   10  11
+
+e2c_table = [
+    [0, -1],  # 0
+    [1, -1],
+    [0, -1],  # 2
+    [0, 1],
+    [1, -1],
+    [0, 2],  # 5
+    [1, 3],
+    [2, -1],  # 7
+    [2, 3],
+    [3, -1],
+    [2, -1],  # 9
+    [3, -1],
+]
