@@ -157,8 +157,25 @@ class LocatedField:
         return self.array()
 
 
-def shift(iter, offset):  # shift is lazy
+class _Shift:
+    @staticmethod
+    def shift_impl(it, offset):
+        raise RuntimeError("shift is not properly configured")
+
+    def __call__(self, it, offset):
+        return _Shift.shift_impl(it, offset)
+
+
+shift = _Shift()
+
+
+def fallback_shift(iter, offset):
     return iter.shift(offset)
+
+
+default_shift = fallback_shift
+
+_Shift.shift_impl = default_shift
 
 
 def deref(iter):
@@ -184,7 +201,7 @@ def lift(stencil):
                 shifted_args = args
                 for offset in self.offsets:
                     shifted_args = tuple(
-                        map(lambda arg: shift(arg, offset), shifted_args)
+                        map(lambda arg: arg.shift(offset), shifted_args)
                     )
 
                 if any(shifted_arg.is_none() for shifted_arg in shifted_args):
@@ -239,6 +256,43 @@ def apply_stencil(sten, domain, ins, outs):  # domain is Dict[axis, range]
         for r, out in zip(res, outs):
             ordered_indices = tuple(get_order_indices(out.axises, pos))
             out[ordered_indices] = r
+
+
+class OffsetLiteral:
+    ...
+
+
+def apply_stencil_offset_literal(
+    sten, offset_provider, domain, ins, outs
+):  # domain is Dict[axis, range]
+    def patched_shift(it, offset):
+        if isinstance(offset, RandomAccessOffset):  # built-in
+            return it.shift(offset)
+        elif isinstance(offset, OffsetLiteral):
+            return it.shift(offset_provider[type(offset)](offset.i))
+        elif inspect.isclass(offset) and issubclass(
+            offset, OffsetLiteral
+        ):  # just for simplification
+            return it.shift(offset_provider[offset])
+        print(offset)
+        raise NotImplementedError()
+
+    _Shift.shift_impl = patched_shift
+
+    for pos in domain_iterator(domain):
+        # ins_iters = list(MDIterator(inp, pos) for inp in ins)
+        ins_iters = list(make_in_iterator(inp, pos) for inp in ins)
+        res = sten(*ins_iters)
+        if not isinstance(res, tuple):
+            res = (res,)
+        if not len(res) == len(outs):
+            IndexError("Number of return values doesn't match number of output fields.")
+
+        for r, out in zip(res, outs):
+            ordered_indices = tuple(get_order_indices(out.axises, pos))
+            out[ordered_indices] = r
+
+    _Shift.shift_impl = default_shift
 
 
 # this is a hack for having sparse field, we can just pass extra dimensions and you get an array
@@ -742,6 +796,23 @@ def edges_to_cell(C2E):
     return variant
 
 
+@dataclass
+class C2E(OffsetLiteral):
+    i: int
+
+
+def edges_to_cell_new(inp):
+    acc = shift(inp, C2E)
+    return reduce(lambda a, b: a + b, 0.0)(acc)
+
+    # return (
+    #     deref(shift(inp, C2E(0)))
+    #     + deref(shift(inp, C2E(1)))
+    #     + deref(shift(inp, C2E(2)))
+    #     + deref(shift(inp, C2E(3)))
+    # )
+
+
 # Cells
 # 0 1 2
 # 3 4 5
@@ -814,7 +885,14 @@ def test_indirect():
 
     ref = np.asarray(list(sum(row) for row in c2e_tbl))
 
-    apply_stencil(edges_to_cell(C2E_indirect), {Cell: range(9)}, [inp], [out])
+    apply_stencil_offset_literal(
+        edges_to_cell_new,
+        {C2E: C2E_indirect},
+        {Cell: range(9)},
+        [inp],
+        [out],
+    )
+    # apply_stencil(edges_to_cell(C2E_indirect), {Cell: range(9)}, [inp], [out])
     assert np.allclose(ref, np.asarray(out))
 
 
@@ -897,14 +975,16 @@ C2E_strided = OffsetGroup(
 #     assert np.allclose(ref, np.asarray(out))
 
 
-def edges_to_cell_to_cell(C2E, C2C):
-    def variant(inp):
-        c2es = shift(inp, C2E)
-        c2e_sum = lift(reduce(lambda a, b: a + b, 0.0))(c2es)
-        c2cs = shift(c2e_sum, C2C)
-        return reduce(lambda a, b: a + b, 0.0)(c2cs)
+@dataclass
+class C2C(OffsetLiteral):
+    i: int
 
-    return variant
+
+def edges_to_cell_to_cell(inp):
+    c2es = shift(inp, C2E)
+    c2e_sum = lift(reduce(lambda a, b: a + b, 0.0))(c2es)
+    c2cs = shift(c2e_sum, C2C)
+    return reduce(lambda a, b: a + b, 0.0)(c2cs)
 
 
 def test_lifted_reduction():
@@ -914,8 +994,9 @@ def test_lifted_reduction():
     e2c_sum = list(sum(row) for row in c2e_tbl)
     ref = np.asarray([e2c_sum[1] + e2c_sum[3] + e2c_sum[5] + e2c_sum[7]])
 
-    apply_stencil(
-        edges_to_cell_to_cell(C2E_indirect, C2C_indirect),
+    apply_stencil_offset_literal(
+        edges_to_cell_to_cell,
+        {C2C: C2C_indirect, C2E: C2E_indirect},
         {Cell: range(4, 5)},
         [inp],
         [out],
@@ -1084,8 +1165,12 @@ def test_colored_execution():
 
     ref = np.asarray(list(sum(row) for row in c2e_tbl)).reshape(3, 3)
 
-    apply_stencil(
-        edges_to_cell(C2E_strided), {IC: range(3), JC: range(3)}, [inp], [out]
+    apply_stencil_offset_literal(
+        edges_to_cell_new,
+        {C2E: C2E_strided},
+        {IC: range(3), JC: range(3)},
+        [inp],
+        [out],
     )
     assert np.allclose(ref, np.asarray(out))
 
