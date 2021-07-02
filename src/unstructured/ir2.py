@@ -1,16 +1,17 @@
-from abc import ABC
 from typing import Any, List
 from eve import Node
 from eve import codegen
 from eve.type_definitions import SymbolName, SymbolRef
+from eve.traits import SymbolTableTrait
 from eve.codegen import TemplatedGenerator
 from eve.codegen import FormatTemplate as as_fmt
 from eve.codegen import MakoTemplate as as_mako
 from devtools import debug
 from yasi import indent_code
+from unstructured.sym_validation import validate_symbol_refs
 
 
-class Param(Node):  # helper
+class Sym(Node):  # helper
     id: SymbolName
 
 
@@ -32,9 +33,9 @@ class OffsetLiteral(Expr):
     # index: int
 
 
-class FunctionDefinition(Node):
+class FunctionDefinition(Node, SymbolTableTrait):
     id: SymbolName
-    params: List[Param]
+    params: List[Sym]
     expr: Expr
 
 
@@ -42,8 +43,8 @@ class SymRef(Expr):
     id: SymbolRef
 
 
-class Lambda(Expr):
-    params: List[Param]
+class Lambda(Expr, SymbolTableTrait):
+    params: List[Sym]
     expr: Expr
 
 
@@ -64,20 +65,35 @@ class StencilClosure(Node):
     inputs: List[SymRef]
 
 
-class FencilDefinition(Node):
+class FencilDefinition(Node, SymbolTableTrait):
     id: SymbolName
-    params: List[Param]
+    params: List[Sym]
     closures: List[StencilClosure]
 
 
-class Program(Node):
+class Program(Node, SymbolTableTrait):
     function_definitions: List[FunctionDefinition]
     fencil_definitions: List[FencilDefinition]
     setqs: List[Setq]
 
+    builtin_functions = list(
+        Sym(id=name)
+        for name in [
+            "cartesian",
+            "compose",
+            "lift",
+            "deref",
+            "shift",
+            "scan",
+            "plus",
+            "minus",
+        ]
+    )
+    _validate_symbol_refs = validate_symbol_refs()
+
 
 class ToLispLike(TemplatedGenerator):
-    Param = as_fmt("{id}")
+    Sym = as_fmt("{id}")
     FunCall = as_fmt("({name} {' '.join(args)})")
     IntLiteral = as_fmt("{value}")
     OffsetLiteral = as_fmt("{value}")
@@ -126,11 +142,11 @@ class ToLispLike(TemplatedGenerator):
 
 
 class ToyCpp(TemplatedGenerator):
+    Sym = as_fmt("{id}")
     SymRef = as_fmt("{id}")
     IntLiteral = as_fmt("{value}")
     OffsetLiteral = as_fmt("{value}_c")
     StringLiteral = as_fmt("{value}")
-    Param = as_fmt("{id}")
     FunCall = as_fmt("{name}({','.join(args)})")
     Lambda = as_mako(
         "[=](${','.join('auto ' + p for p in params)}){return ${expr};}"
@@ -185,9 +201,9 @@ def shift(it, *offsets):
 
 ldif = FunctionDefinition(
     id="ldif",
-    params=[Param(id="d")],
+    params=[Sym(id="d")],
     expr=Lambda(
-        params=[Param(id="in")],
+        params=[Sym(id="in")],
         expr=(
             minus(
                 deref(
@@ -201,19 +217,19 @@ ldif = FunctionDefinition(
 
 rdif = FunctionDefinition(
     id="rdif",
-    params=[Param(id="d")],
+    params=[Sym(id="d")],
     expr=f("compose", f("ldif", s("d")), f("shift", s("d"), OffsetLiteral(value=1))),
 )
 
 dif2 = FunctionDefinition(
     id="dif2",
-    params=[Param(id="d")],
+    params=[Sym(id="d")],
     expr=f("compose", f("ldif", s("d")), f("lift", f("rdif", s("d")))),
 )
 
 lap = FunctionDefinition(
     id="lap",
-    params=[Param(id="in")],
+    params=[Sym(id="in")],
     expr=f(
         "plus",
         f(f("dif2", StringLiteral(value="i")), s("in")),
@@ -224,13 +240,13 @@ lap = FunctionDefinition(
 my_fencil = FencilDefinition(
     id="testee",
     params=[
-        Param(id="xs"),
-        Param(id="xe"),
-        Param(id="ys"),
-        Param(id="ye"),
-        Param(id="z"),
-        Param(id="output"),
-        Param(id="input"),
+        Sym(id="xs"),
+        Sym(id="xe"),
+        Sym(id="ys"),
+        Sym(id="ye"),
+        Sym(id="z"),
+        Sym(id="output"),
+        Sym(id="input"),
     ],
     closures=[
         StencilClosure(
