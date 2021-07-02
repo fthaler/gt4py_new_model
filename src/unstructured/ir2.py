@@ -1,4 +1,4 @@
-from typing import Any, List
+from typing import Any, List, Union
 from eve import Node
 from eve import codegen
 from eve.type_definitions import SymbolName, SymbolRef
@@ -28,9 +28,7 @@ class StringLiteral(Expr):
 
 
 class OffsetLiteral(Expr):
-    value: int
-    # name: str
-    # index: int
+    value: Union[int, str]
 
 
 class FunctionDefinition(Node, SymbolTableTrait):
@@ -232,8 +230,8 @@ lap = FunctionDefinition(
     params=[Sym(id="in")],
     expr=f(
         "plus",
-        f(f("dif2", StringLiteral(value="i")), s("in")),
-        f(f("dif2", StringLiteral(value="j")), s("in")),
+        f(f("dif2", OffsetLiteral(value="i")), s("in")),
+        f(f("dif2", OffsetLiteral(value="j")), s("in")),
     ),
 )
 
