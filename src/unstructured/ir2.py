@@ -143,7 +143,10 @@ class ToyCpp(TemplatedGenerator):
     Sym = as_fmt("{id}")
     SymRef = as_fmt("{id}")
     IntLiteral = as_fmt("{value}")
-    OffsetLiteral = as_fmt("{value}_c")
+
+    def visit_OffsetLiteral(self, node: OffsetLiteral, **kwargs):
+        return node.value if isinstance(node.value, str) else f"{node.value}_c"
+
     StringLiteral = as_fmt("{value}")
     FunCall = as_fmt("{name}({','.join(args)})")
     Lambda = as_mako(
