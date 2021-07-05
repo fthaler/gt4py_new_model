@@ -1,3 +1,4 @@
+import functools
 from typing import Any, List, Union
 from eve import Node
 from eve import codegen
@@ -11,6 +12,16 @@ from yasi import indent_code
 from unstructured.sym_validation import validate_symbol_refs
 import inspect
 
+# Questions:
+# - Where to selected backend? Lazy (at call to fencil) or eager (select via decorator on each function)
+# If eager:
+# - Monkey patch the builtins in the "fundef" decorator, rest should work as below.
+# If lazy:
+# - How do we switch?
+#   - Register all functions that have decorator (in the decorator).
+#   - Monkey patch builtins
+#   - Replace the functions with the eve nodes as below.
+# - Do we collect all functions or only the funtions that are called?
 
 _fundefs = []  # something like this or collect only reachable functions
 
@@ -24,7 +35,7 @@ class Expr(Node):
         return FunCall(name=SymRef(id="plus"), args=[self, other])
 
     def __radd__(self, other):
-        return FunCall(name=SymRef(id="plus"), args=[make_node(other), self])
+        return make_node(other) + self
 
     def __sub__(self, other):
         return FunCall(name=SymRef(id="minus"), args=[self, other])
@@ -55,7 +66,7 @@ class Lambda(Expr, SymbolTableTrait):
 
 
 class FunCall(Expr):
-    name: Expr
+    name: Expr  # VType[Callable]
     args: List[Expr]
 
 
@@ -66,6 +77,12 @@ class FunctionDefinition(Node, SymbolTableTrait):
 
     def __call__(self, *args):
         return FunCall(name=SymRef(id=str(self.id)), args=[*args])
+
+    def __eq__(self, other):
+        return self.id == other.id
+
+    def __hash__(self):
+        return hash(self.id)
 
 
 class Setq(Node):
@@ -218,22 +235,39 @@ def _f(fun, *args):
     return FunCall(name=fun, args=[*args])
 
 
+# builtins
+
+# # add all builtins
+# for builtin in ["deref", "lift", "compose", "cartesian"]:
+#     current_module = __import__(__name__)
+#     setattr(current_module, builtin, lambda *args: _f(builtin, *args))
+
+
 def deref(arg):
     return _f("deref", arg)
-
-
-def shift(*offsets):
-    offsets = tuple(
-        OffsetLiteral(value=o) if isinstance(o, str) or isinstance(o, int) else o
-        for o in offsets
-    )
-    return _f("shift", *offsets)
 
 
 def lift(sten):
     return _f("lift", sten)
 
 
+def compose(*args):
+    return _f("compose", *args)
+
+
+def cartesian(*args):
+    return _f("cartesian", *args)
+
+
+# shift promotes its arguments to literals, therefore special
+def shift(*offsets):
+    offsets = tuple(
+        OffsetLiteral(value=o) if isinstance(o, (str, int)) else o for o in offsets
+    )
+    return _f("shift", *offsets)
+
+
+# helpers
 def make_node(o):
     if isinstance(o, Node):
         return o
@@ -248,49 +282,68 @@ def make_node(o):
 
 
 def fundef(fun, *, is_lambda=False):
-    body = fun(*list(_s(param) for param in inspect.signature(fun).parameters.keys()))
-    body = make_node(body)
     if is_lambda:
+        body = fun(
+            *list(_s(param) for param in inspect.signature(fun).parameters.keys())
+        )
+        body = make_node(body)
         return Lambda(
             params=list(
                 Sym(id=param) for param in inspect.signature(fun).parameters.keys()
             ),
             expr=body,
         )
-    else:
-        res = FunctionDefinition(
-            id=fun.__name__,
-            params=list(
-                Sym(id=param) for param in inspect.signature(fun).parameters.keys()
-            ),
-            expr=body,
-        )
-        _fundefs.append(res)
-        return res
+
+    @functools.wraps(fun)
+    def _dispatcher(*args):
+        if not all(isinstance(arg, Node) for arg in args) and not is_lambda:
+            return fun(*args)
+        else:
+            body = fun(
+                *list(_s(param) for param in inspect.signature(fun).parameters.keys())
+            )
+            debug(body)
+            body = make_node(body)
+            debug(body)
+            # if is_lambda:
+            #     return Lambda(
+            #         params=list(
+            #             Sym(id=param)
+            #             for param in inspect.signature(fun).parameters.keys()
+            #         ),
+            #         expr=body,
+            #     )
+            # else:
+            res = FunctionDefinition(
+                id=fun.__name__,
+                params=list(
+                    Sym(id=param) for param in inspect.signature(fun).parameters.keys()
+                ),
+                expr=body,
+            )
+            if not res in _fundefs:
+                _fundefs.append(res)
+            return res(*args)
+
+    return _dispatcher
 
 
 def lambdadef(fun):
     return fundef(fun, is_lambda=True)
 
 
-def compose(*args):
-    return _f("compose", *args)
-
-
-def cartesian(*args):
-    return _f("cartesian", *args)
-
-
 def apply_stencil(domain, stencil, outputs, inputs):
+    # trace
+    stencil(*list(_s(param) for param in inspect.signature(stencil).parameters.keys()))
     return StencilClosure(
         domain=domain,
-        stencil=SymRef(id=str(stencil.id)),
+        stencil=SymRef(id=str(stencil.__name__)),
         outputs=outputs,
         inputs=inputs,
     )
 
 
-def closure(*args):
+def closures(*args):
     return list(arg for arg in args)
 
 
@@ -310,6 +363,18 @@ def fendef(fun):
 @fundef
 def ldif(d):
     return lambda inp: deref(shift(d, -1)(inp)) - deref(inp)
+
+
+# debug(ldif(OffsetLiteral(value="i")))
+# exit(1)
+
+# fundef return callable that allows selecting tracing or original function
+
+# def ldif(d):
+#     return FunctionDefinition(name="ldif", args=[Sym])
+
+# debug(ldif(OffsetLiteral(value="i")))
+# exit(1)
 
 
 @fundef
@@ -333,7 +398,7 @@ def lap(inp):
 
 @fendef
 def testee(xs, xe, ys, ye, z, output, input):
-    return closure(apply_stencil(cartesian(xs, xe, ys, ye, z), lap, [output], [input]))
+    return closures(apply_stencil(cartesian(xs, xe, ys, ye, z), lap, [output], [input]))
 
 
 # my_fencil = FencilDefinition(
