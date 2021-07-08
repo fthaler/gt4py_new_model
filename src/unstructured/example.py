@@ -1,22 +1,10 @@
-from inspect import Traceback
 from unstructured.runtime import offset
 from unstructured.tracing import (
     OffsetLiteral,
-    Tracer,
-    apply_stencil,
-    cartesian,
-    compose,
-    # deref,
-    # fendef,
-    # fundef,
-    # lift,
-    # shift,
 )
 
-from unstructured.builtins import deref, shift, lift
-from unstructured.runtime import fundef, fendef, closures
-import unstructured
-from unstructured import tracing
+from unstructured.builtins import deref, shift, lift, compose, cartesian
+from unstructured.runtime import fundef, fendef, closure
 from devtools import debug
 
 
@@ -48,9 +36,7 @@ def lap(inp):
 
 @fendef
 def testee(xs, xe, ys, ye, z, output, input):
-    return closures(
-        apply_stencil(cartesian(xs, xe, ys, ye, 0, z), lap, [output], [input])
-    )
+    closure(cartesian(xs, xe, ys, ye, 0, z), lap, [output], [input])
 
 
 testee(*([None] * 7), backend="lisp")

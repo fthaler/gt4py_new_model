@@ -1,6 +1,9 @@
 from typing import Union
 from dataclasses import dataclass
 
+from unstructured.builtins import BackendNotSelectedError
+from unstructured.patch_helper import dispatch
+
 
 @dataclass
 class Offset:
@@ -29,10 +32,6 @@ def fendef(fun):
     return _fendef_impl(fun)
 
 
-# will be monkey patched during tracing
-def _closures_impl(*args):
-    ...
-
-
-def closures(*args):
-    return _closures_impl(*args)
+@dispatch
+def closure(*args):
+    return BackendNotSelectedError()

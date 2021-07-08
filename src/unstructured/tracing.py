@@ -1,13 +1,16 @@
 import functools
 from typing import Any
+from typing_extensions import runtime
 from eve import Node
 from devtools import debug
 import inspect
 import unstructured.builtins
+from unstructured.patch_helper import Dispatcher
 import unstructured.runtime
 from unstructured.ir import (
     Expr,
     FencilDefinition,
+    FloatLiteral,
     FunCall,
     FunctionDefinition,
     IntLiteral,
@@ -29,7 +32,7 @@ def monkeypatch_method(cls):
     return decorator
 
 
-def patch_Expr():
+def _patch_Expr():
     @monkeypatch_method(Expr)
     def __add__(self, other):
         return FunCall(fun=SymRef(id="plus"), args=[self, other])
@@ -47,36 +50,16 @@ def patch_Expr():
         return FunCall(fun=self, args=[*args])
 
 
-patch_Expr()
+_patch_Expr()
 
 
-def patch_FunctionDefinition():
+def _patch_FunctionDefinition():
     @monkeypatch_method(FunctionDefinition)
     def __call__(self, *args):
         return FunCall(fun=SymRef(id=str(self.id)), args=[*args])
 
 
-patch_FunctionDefinition()
-
-
-# def patch_FencilDefinition():
-#     @monkeypatch_method(FencilDefinition)
-#     def __call__(self, *args: Any, **kwargs: Any) -> Any:
-#         if not len(args) == len(self.params):
-#             raise RuntimeError("Incorrect number of arguments")
-
-#         prog = Program(
-#             function_definitions=Tracer.fundefs, fencil_definitions=[self], setqs=[]
-#         )
-#         if "backend" in kwargs:
-#             if kwargs["backend"] in backend._BACKENDS:
-#                 b = backend.get_backend(kwargs["backend"])
-#                 print(b.apply(prog))
-#             else:
-#                 raise RuntimeError(f"Backend {kwargs['backend']} does not exist.")
-
-
-# patch_FencilDefinition()
+_patch_FunctionDefinition()
 
 
 def execute_program(fencil: FencilDefinition, *args, **kwargs):
@@ -114,18 +97,22 @@ def _f(fun, *args):
 #     setattr(current_module, builtin, lambda *args: _f(builtin, *args))
 
 
+@unstructured.builtins.deref.register("tracing")
 def deref(arg):
     return _f("deref", arg)
 
 
+@unstructured.builtins.lift.register("tracing")
 def lift(sten):
     return _f("lift", sten)
 
 
+@unstructured.builtins.compose.register("tracing")
 def compose(*args):
     return _f("compose", *args)
 
 
+@unstructured.builtins.cartesian.register("tracing")
 def cartesian(*args):
     return _f("cartesian", *args)
 
@@ -138,6 +125,7 @@ def offset(value):
 
 
 # shift promotes its arguments to literals, therefore special
+@unstructured.builtins.shift.register("tracing")
 def shift(*offsets):
     offsets = tuple(
         OffsetLiteral(value=o) if isinstance(o, (str, int)) else o for o in offsets
@@ -156,6 +144,8 @@ def make_node(o):
             return lambdadef(o)
     if isinstance(o, int):
         return IntLiteral(value=o)
+    if isinstance(o, float):
+        return FloatLiteral(value=o)
     raise NotImplementedError(f"Cannot handle {o}")
 
 
@@ -212,54 +202,45 @@ def lambdadef(fun):
     return fundef(fun, is_lambda=True)
 
 
+# TODO Context manager from stdlib "contextlib"
+
+
 class Tracer:
     is_tracing = False
     fundefs = []
-
-    @staticmethod
-    def _enable_tracing():
-        unstructured.builtins._deref_impl = deref
-        unstructured.builtins._lift_impl = lift
-        unstructured.builtins._shift_impl = shift
-
-        unstructured.runtime._closures_impl = closures
-
-    @staticmethod
-    def _disable_tracing():
-        unstructured.builtins._deref_impl = unstructured.builtins.default_impl
-        unstructured.builtins._lift_impl = unstructured.builtins.default_impl
-        unstructured.builtins._shift_impl = unstructured.builtins.default_impl
-
-        unstructured.runtime._closures_impl = lambda *args: ...
+    closures = []
 
     @classmethod
     def add_fundef(cls, fun):
         if not fun in cls.fundefs:
             cls.fundefs.append(fun)
 
+    @classmethod
+    def add_closure(cls, closure):
+        cls.closures.append(closure)
+
     def __enter__(self):
         self.is_tracing = True
-        self._enable_tracing()
+        Dispatcher.push_key("tracing")
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
-        self._disable_tracing()
-        self.fundefs = []
+        type(self).fundefs = []
+        type(self).closures = []
         self.is_tracing = False
+        Dispatcher.pop_key()
 
 
-def apply_stencil(domain, stencil, outputs, inputs):
+@unstructured.runtime.closure.register("tracing")
+def closure(domain, stencil, outputs, inputs):
     stencil(*list(_s(param) for param in inspect.signature(stencil).parameters.keys()))
-    return StencilClosure(
-        domain=domain,
-        stencil=SymRef(id=str(stencil.__name__)),
-        outputs=outputs,
-        inputs=inputs,
+    Tracer.add_closure(
+        StencilClosure(
+            domain=domain,
+            stencil=SymRef(id=str(stencil.__name__)),
+            outputs=outputs,
+            inputs=inputs,
+        )
     )
-
-
-def closures(*args):
-    print("closures")
-    return list(arg for arg in args)
 
 
 def fendef(fun):
@@ -267,7 +248,7 @@ def fendef(fun):
     def _dispatcher(*args, **kwargs):
         if "backend" in kwargs:
             with Tracer() as _:
-                res = fun(
+                fun(
                     *list(
                         _s(param) for param in inspect.signature(fun).parameters.keys()
                     )
@@ -279,9 +260,9 @@ def fendef(fun):
                         Sym(id=param)
                         for param in inspect.signature(fun).parameters.keys()
                     ),
-                    closures=res,
+                    closures=Tracer.closures,
                 )
-            execute_program(fencil, *args, **kwargs)
+                execute_program(fencil, *args, **kwargs)
         else:
             return fun(*args)
 
