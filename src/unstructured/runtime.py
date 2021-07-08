@@ -1,8 +1,7 @@
 from typing import Union
 from dataclasses import dataclass
 
-from unstructured.builtins import BackendNotSelectedError
-from unstructured.patch_helper import dispatch
+from unstructured.builtins import BackendNotSelectedError, builtin_dispatch
 
 
 @dataclass
@@ -32,6 +31,6 @@ def fendef(fun):
     return _fendef_impl(fun)
 
 
-@dispatch
+@builtin_dispatch
 def closure(*args):
     return BackendNotSelectedError()

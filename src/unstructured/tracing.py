@@ -5,7 +5,6 @@ from eve import Node
 from devtools import debug
 import inspect
 import unstructured.builtins
-from unstructured.patch_helper import Dispatcher
 import unstructured.runtime
 from unstructured.ir import (
     Expr,
@@ -221,13 +220,13 @@ class Tracer:
 
     def __enter__(self):
         self.is_tracing = True
-        Dispatcher.push_key("tracing")
+        unstructured.builtins.builtin_dispatch.push_key("tracing")
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         type(self).fundefs = []
         type(self).closures = []
         self.is_tracing = False
-        Dispatcher.pop_key()
+        unstructured.builtins.builtin_dispatch.pop_key()
 
 
 @unstructured.runtime.closure.register("tracing")

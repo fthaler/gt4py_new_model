@@ -1,54 +1,57 @@
 from typing import Any
 
 
+class _fun_dispatcher:
+    def __init__(self, dispatcher, fun) -> None:
+        self.dispatcher = dispatcher
+        self.fun = fun
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        if self.dispatcher.key is None:
+            return self.fun(*args, **kwargs)
+        else:
+            return self.dispatcher._funs[self.dispatcher.key][self.fun.__name__](
+                *args, **kwargs
+            )
+
+    def register(self, key):
+        self.dispatcher.register_key(key)
+
+        def _impl(fun):
+            self.dispatcher._funs[key][self.fun.__name__] = fun
+
+        return _impl
+
+
 class Dispatcher:
-    _funs = {}
-    key_stack = []
+    def __init__(self) -> None:
+        self._funs = {}
+        self.key_stack = []
 
-    @classmethod
-    def key(cls):
-        return cls.key_stack[-1] if cls.key_stack else None
+    @property
+    def key(self):
+        return self.key_stack[-1] if self.key_stack else None
 
-    @classmethod
-    def register_key(cls, key):
-        if not key in cls._funs:
-            cls._funs[key] = {}
+    def register_key(self, key):
+        if not key in self._funs:
+            self._funs[key] = {}
 
-    @classmethod
-    def push_key(cls, key):
-        if key not in cls._funs:
+    def push_key(self, key):
+        if key not in self._funs:
             raise RuntimeError(f"Key {key} not registered")
-        cls.key_stack.append(key)
+        self.key_stack.append(key)
 
-    @classmethod
-    def pop_key(cls):
-        cls.key_stack.pop()
+    def pop_key(self):
+        self.key_stack.pop()
 
-    @classmethod
-    def clear_key(cls):
-        cls.key_stack = []
+    def clear_key(self):
+        self.key_stack = []
 
+    def __call__(self, fun):
+        return self.dispatch(fun)
 
-def dispatch(fun):
-    fun_name = fun.__name__
-
-    # @functools.wraps(fun)
-    class _dispatcher:
-        def __call__(self, *args: Any, **kwargs: Any) -> Any:
-            if Dispatcher.key() is None:
-                return fun(*args, **kwargs)
-            else:
-                return Dispatcher._funs[Dispatcher.key()][fun_name](*args, **kwargs)
-
-        def register(self, key):
-            Dispatcher.register_key(key)
-
-            def _impl(fun):
-                Dispatcher._funs[key][fun_name] = fun
-
-            return _impl
-
-    return _dispatcher()
+    def dispatch(self, fun):
+        return _fun_dispatcher(self, fun)
 
 
 # @dispatch

@@ -1,4 +1,6 @@
-from unstructured.patch_helper import dispatch
+from unstructured.patch_helper import Dispatcher
+
+builtin_dispatch = Dispatcher()
 
 
 class BackendNotSelectedError(RuntimeError):
@@ -10,26 +12,26 @@ def default_impl(*args):
     raise BackendNotSelectedError()
 
 
-@dispatch
+@builtin_dispatch
 def deref(*args):
     raise BackendNotSelectedError()
 
 
-@dispatch
+@builtin_dispatch
 def shift(*args):
     raise BackendNotSelectedError()
 
 
-@dispatch
+@builtin_dispatch
 def lift(*args):
     raise BackendNotSelectedError()
 
 
-@dispatch
+@builtin_dispatch
 def cartesian(*args):
     raise BackendNotSelectedError()
 
 
-@dispatch
+@builtin_dispatch
 def compose(sten):
     raise BackendNotSelectedError()
