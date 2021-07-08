@@ -1,4 +1,4 @@
-from unstructured.patch_helper import Dispatcher
+from unstructured.dispatcher import Dispatcher
 
 builtin_dispatch = Dispatcher()
 

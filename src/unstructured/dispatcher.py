@@ -1,0 +1,88 @@
+from typing import Any
+
+
+class _fun_dispatcher:
+    def __init__(self, dispatcher, fun) -> None:
+        self.dispatcher = dispatcher
+        self.fun = fun
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        if self.dispatcher.key is None:
+            return self.fun(*args, **kwargs)
+        else:
+            return self.dispatcher._funs[self.dispatcher.key][self.fun.__name__](
+                *args, **kwargs
+            )
+
+    def register(self, key):
+        self.dispatcher.register_key(key)
+
+        def _impl(fun):
+            self.dispatcher._funs[key][self.fun.__name__] = fun
+
+        return _impl
+
+
+class Dispatcher:
+    def __init__(self) -> None:
+        self._funs = {}
+        self.key_stack = []
+
+    @property
+    def key(self):
+        return self.key_stack[-1] if self.key_stack else None
+
+    def register_key(self, key):
+        if not key in self._funs:
+            self._funs[key] = {}
+
+    def push_key(self, key):
+        if key not in self._funs:
+            raise RuntimeError(f"Key {key} not registered")
+        self.key_stack.append(key)
+
+    def pop_key(self):
+        self.key_stack.pop()
+
+    def clear_key(self):
+        self.key_stack = []
+
+    def __call__(self, fun):
+        return self.dispatch(fun)
+
+    def dispatch(self, fun):
+        return _fun_dispatcher(self, fun)
+
+
+# @dispatch
+# def foo():
+#     print("foo")
+
+
+# @foo.register("tracing")
+# def bar():
+#     print("bar")
+
+
+# @foo.register("other")
+# def baz():
+#     print("baz")
+
+
+# # def foo():
+# #     ...
+
+
+# print(dispatch.__name__)
+# print(foo.__name__)
+
+
+# foo()
+# Dispatcher.push_key("tracing")
+# foo()
+# Dispatcher.push_key("other")
+# foo()
+# Dispatcher.pop_key()
+# foo()
+# Dispatcher.clear_key()
+# foo()
