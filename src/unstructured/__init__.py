@@ -1,4 +1,5 @@
 from typing import Optional, Union
+from . import tracing
 
 from packaging.version import LegacyVersion, Version, parse
 from pkg_resources import DistributionNotFound, get_distribution
