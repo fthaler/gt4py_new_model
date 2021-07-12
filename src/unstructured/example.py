@@ -1,10 +1,5 @@
-from unstructured.runtime import offset
-from unstructured.tracing import (
-    OffsetLiteral,
-)
-
 from unstructured.builtins import deref, shift, lift, compose, cartesian
-from unstructured.runtime import fundef, fendef, closure
+from unstructured.runtime import fundef, fendef, closure, offset
 from devtools import debug
 
 
@@ -23,10 +18,8 @@ def dif2(d):
     return compose(ldif(d), lift(rdif(d)))
 
 
-# i = offset("i")
-# j = offset("j")
-i = OffsetLiteral(value="i")
-j = OffsetLiteral(value="j")
+i = offset("i")
+j = offset("j")
 
 
 @fundef

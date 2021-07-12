@@ -55,7 +55,9 @@ _patch_Expr()
 def _patch_FunctionDefinition():
     @monkeypatch_method(FunctionDefinition)
     def __call__(self, *args):
-        return FunCall(fun=SymRef(id=str(self.id)), args=[*args])
+        return FunCall(
+            fun=SymRef(id=str(self.id)), args=[*(make_node(arg) for arg in args)]
+        )
 
 
 _patch_FunctionDefinition()
@@ -89,13 +91,6 @@ def _f(fun, *args):
 
 
 # builtins
-
-# # add all builtins
-# for builtin in ["deref", "lift", "compose", "cartesian"]:
-#     current_module = __import__(__name__)
-#     setattr(current_module, builtin, lambda *args: _f(builtin, *args))
-
-
 @unstructured.builtins.deref.register("tracing")
 def deref(arg):
     return _f("deref", arg)
@@ -116,13 +111,6 @@ def cartesian(*args):
     return _f("cartesian", *args)
 
 
-# runtime functions
-
-
-def offset(value):
-    return OffsetLiteral(value=value)
-
-
 # shift promotes its arguments to literals, therefore special
 @unstructured.builtins.shift.register("tracing")
 def shift(*offsets):
@@ -141,6 +129,8 @@ def make_node(o):
             return lambdadef(o)
         if o.__code__.co_flags & inspect.CO_NESTED:
             return lambdadef(o)
+    if isinstance(o, unstructured.runtime.Offset):
+        return OffsetLiteral(value=o.value)
     if isinstance(o, int):
         return IntLiteral(value=o)
     if isinstance(o, float):
@@ -148,57 +138,41 @@ def make_node(o):
     raise NotImplementedError(f"Cannot handle {o}")
 
 
-def fundef(fun, *, is_lambda=False):
-    if is_lambda:
-        body = fun(
-            *list(_s(param) for param in inspect.signature(fun).parameters.keys())
-        )
-        body = make_node(body)
-        return Lambda(
-            params=list(
-                Sym(id=param) for param in inspect.signature(fun).parameters.keys()
-            ),
-            expr=body,
-        )
+def trace_function_call(fun):
+    body = fun(*list(_s(param) for param in inspect.signature(fun).parameters.keys()))
+    return make_node(body)
 
+
+def lambdadef(fun):
+    return Lambda(
+        params=list(
+            Sym(id=param) for param in inspect.signature(fun).parameters.keys()
+        ),
+        expr=trace_function_call(fun),
+    )
+
+
+@unstructured.runtime.fundef.register("tracing")
+def fundef(fun):
     @functools.wraps(fun)
     def _dispatcher(*args):
-        if not all(isinstance(arg, Node) for arg in args) and not is_lambda:
-            return fun(*args)
-        else:
-            body = fun(
-                *list(_s(param) for param in inspect.signature(fun).parameters.keys())
-            )
-            # debug(body)
-            body = make_node(body)
-            # debug(body)
-            # if is_lambda:
-            #     return Lambda(
-            #         params=list(
-            #             Sym(id=param)
-            #             for param in inspect.signature(fun).parameters.keys()
-            #         ),
-            #         expr=body,
-            #     )
-            # else:
+        if Tracer.is_tracing:
             res = FunctionDefinition(
                 id=fun.__name__,
                 params=list(
                     Sym(id=param) for param in inspect.signature(fun).parameters.keys()
                 ),
-                expr=body,
+                expr=trace_function_call(fun),
             )
             Tracer.add_fundef(res)
             return res(*args)
+        else:
+            return fun(*args)
 
     return _dispatcher
 
 
-unstructured.runtime._fundef_impl = fundef
-
-
-def lambdadef(fun):
-    return fundef(fun, is_lambda=True)
+unstructured.runtime.fun_fen_def_dispatch.push_key("tracing")
 
 
 # TODO Context manager from stdlib "contextlib"
@@ -219,13 +193,13 @@ class Tracer:
         cls.closures.append(closure)
 
     def __enter__(self):
-        self.is_tracing = True
+        type(self).is_tracing = True
         unstructured.builtins.builtin_dispatch.push_key("tracing")
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         type(self).fundefs = []
         type(self).closures = []
-        self.is_tracing = False
+        type(self).is_tracing = False
         unstructured.builtins.builtin_dispatch.pop_key()
 
 
@@ -242,6 +216,7 @@ def closure(domain, stencil, outputs, inputs):
     )
 
 
+@unstructured.runtime.fendef.register("tracing")
 def fendef(fun):
     @functools.wraps(fun)
     def _dispatcher(*args, **kwargs):
@@ -266,6 +241,3 @@ def fendef(fun):
             return fun(*args)
 
     return _dispatcher
-
-
-unstructured.runtime._fendef_impl = fendef

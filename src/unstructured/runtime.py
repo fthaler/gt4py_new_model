@@ -2,6 +2,9 @@ from typing import Union
 from dataclasses import dataclass
 
 from unstructured.builtins import BackendNotSelectedError, builtin_dispatch
+from unstructured.dispatcher import Dispatcher
+
+fun_fen_def_dispatch = Dispatcher()
 
 
 @dataclass
@@ -13,22 +16,14 @@ def offset(value):
     return Offset(value)
 
 
-# will be monkey patched if tracing is loaded
-def _fundef_impl(fun):
-    return fun
-
-
+@fun_fen_def_dispatch
 def fundef(fun):
-    return _fundef_impl(fun)
+    return BackendNotSelectedError()
 
 
-# will be monkey patched if tracing is loaded
-def _fendef_impl(fun):
-    return fun
-
-
+@fun_fen_def_dispatch
 def fendef(fun):
-    return _fendef_impl(fun)
+    return BackendNotSelectedError()
 
 
 @builtin_dispatch
