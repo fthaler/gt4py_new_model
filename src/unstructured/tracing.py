@@ -34,7 +34,7 @@ def monkeypatch_method(cls):
 def _patch_Expr():
     @monkeypatch_method(Expr)
     def __add__(self, other):
-        return FunCall(fun=SymRef(id="plus"), args=[self, other])
+        return FunCall(fun=SymRef(id="plus"), args=[self, make_node(other)])
 
     @monkeypatch_method(Expr)
     def __radd__(self, other):
@@ -42,11 +42,11 @@ def _patch_Expr():
 
     @monkeypatch_method(Expr)
     def __sub__(self, other):
-        return FunCall(fun=SymRef(id="minus"), args=[self, other])
+        return FunCall(fun=SymRef(id="minus"), args=[self, make_node(other)])
 
     @monkeypatch_method(Expr)
     def __call__(self, *args):
-        return FunCall(fun=self, args=[*args])
+        return FunCall(fun=self, args=[*make_node(args)])
 
 
 _patch_Expr()
@@ -55,9 +55,7 @@ _patch_Expr()
 def _patch_FunctionDefinition():
     @monkeypatch_method(FunctionDefinition)
     def __call__(self, *args):
-        return FunCall(
-            fun=SymRef(id=str(self.id)), args=[*(make_node(arg) for arg in args)]
-        )
+        return FunCall(fun=SymRef(id=str(self.id)), args=[*make_node(args)])
 
 
 _patch_FunctionDefinition()
@@ -86,8 +84,7 @@ def _f(fun, *args):
     if isinstance(fun, str):
         fun = _s(fun)
 
-    args = tuple(arg if isinstance(arg, Node) else make_node(arg) for arg in args)
-    return FunCall(fun=fun, args=[*args])
+    return FunCall(fun=fun, args=[*make_node(args)])
 
 
 # builtins
@@ -135,6 +132,12 @@ def make_node(o):
         return IntLiteral(value=o)
     if isinstance(o, float):
         return FloatLiteral(value=o)
+    if isinstance(o, tuple):
+        return tuple(make_node(arg) for arg in o)
+    if isinstance(o, list):
+        return list(make_node(arg) for arg in o)
+    if o is None:
+        return None
     raise NotImplementedError(f"Cannot handle {o}")
 
 
@@ -193,6 +196,7 @@ class Tracer:
         cls.closures.append(closure)
 
     def __enter__(self):
+        assert not type(self).is_tracing
         type(self).is_tracing = True
         unstructured.builtins.builtin_dispatch.push_key("tracing")
 
@@ -222,11 +226,7 @@ def fendef(fun):
     def _dispatcher(*args, **kwargs):
         if "backend" in kwargs:
             with Tracer() as _:
-                fun(
-                    *list(
-                        _s(param) for param in inspect.signature(fun).parameters.keys()
-                    )
-                )
+                trace_function_call(fun)
 
                 fencil = FencilDefinition(
                     id=fun.__name__,
