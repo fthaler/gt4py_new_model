@@ -8,10 +8,6 @@ class BackendNotSelectedError(RuntimeError):
         super().__init__("Backend not selected")
 
 
-def default_impl(*args):
-    raise BackendNotSelectedError()
-
-
 @builtin_dispatch
 def deref(*args):
     raise BackendNotSelectedError()
