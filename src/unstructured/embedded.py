@@ -31,10 +31,10 @@ class J_loc(CartesianAxis):
 
 
 @shift.register(EMBEDDED)
-def shift(offset):
+def shift(*offsets):
     def impl(iter):
         return iter.shift(
-            offset
+            *offsets
         )  # could be removed as only during execution we know what shift does
 
     return impl
@@ -138,8 +138,8 @@ class MDIterator:
         self.pos = pos
         self.offsets = offsets
 
-    def shift(self, offset):
-        return MDIterator(self.field, self.pos, offsets=[*self.offsets, offset])
+    def shift(self, *offsets):
+        return MDIterator(self.field, self.pos, offsets=[*self.offsets, *offsets])
 
     # def get_max_number_of_neighbors(self):
     #     return len(self.get_shifted_pos()[NeighborAxis][-1].offsets)
@@ -279,12 +279,15 @@ def fendef(offset_provider):
     def impl(fun):
         def impl2(*args):
             @unstructured.builtins.shift.register(EMBEDDED)
-            def shift(offset):
+            def shift(*offsets):
                 def impl(iter):
                     return iter.shift(
-                        offset
-                        if isinstance(offset, int)
-                        else offset_provider[offset.value]
+                        *[
+                            offset
+                            if isinstance(offset, int)
+                            else offset_provider[offset.value]
+                            for offset in offsets
+                        ]
                     )
 
                 return impl
@@ -310,7 +313,7 @@ J = offset("J")
 
 @unstructured.runtime.fundef
 def foo(inp):
-    return deref(shift(1)(shift(J)(inp)))
+    return deref(shift(J, 1)(inp))
 
 
 @unstructured.runtime.fendef({"I": I_loc, "J": J_loc})
@@ -338,3 +341,17 @@ print(out[0][0])
 
 testee(out, inp)
 print(out[0][0])
+
+
+@unstructured.runtime.fundef
+def foo2(inp):
+    return deref(shift(I, J, 1, 1)(inp))
+
+
+@unstructured.runtime.fendef({"I": J_loc, "J": I_loc})
+def testee2(output, input):
+    closure(cartesian(0, 1, 0, 1), foo2, [output], [input])
+
+
+testee2(out, inp)
+print(out[0, 0])
