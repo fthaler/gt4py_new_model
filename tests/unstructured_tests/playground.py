@@ -157,25 +157,35 @@ class LocatedField:
         return self.array()
 
 
-class _Shift:
-    @staticmethod
-    def shift_impl(it, offset):
-        raise RuntimeError("shift is not properly configured")
+# class _Shift:
+#     @staticmethod
+#     def shift_impl(it, offset):
+#         raise RuntimeError("shift is not properly configured")
 
-    def __call__(self, it, offset):
-        return _Shift.shift_impl(it, offset)
-
-
-shift = _Shift()
+#     def __call__(self, it, offset):
+#         return _Shift.shift_impl(it, offset)
 
 
-def fallback_shift(iter, offset):
+# shift = _Shift()
+
+
+# def fallback_shift(iter, offset):
+#     return iter.shift(offset)
+
+
+# default_shift = fallback_shift
+
+# _Shift.shift_impl = default_shift
+
+from unstructured.dispatcher import Dispatcher
+
+playground_dispatch = Dispatcher()
+
+
+@playground_dispatch
+def shift(iter, offset):
     return iter.shift(offset)
-
-
-default_shift = fallback_shift
-
-_Shift.shift_impl = default_shift
+    # raise RuntimeError("shift is not configured")
 
 
 def deref(iter):
@@ -265,6 +275,7 @@ class OffsetLiteral:
 def apply_stencil_offset_literal(
     sten, offset_provider, domain, ins, outs
 ):  # domain is Dict[axis, range]
+    @shift.register("embedded")
     def patched_shift(it, offset):
         if isinstance(offset, RandomAccessOffset):  # built-in
             return it.shift(offset)
@@ -277,7 +288,7 @@ def apply_stencil_offset_literal(
         print(offset)
         raise NotImplementedError()
 
-    _Shift.shift_impl = patched_shift
+    playground_dispatch.push_key("embedded")
 
     for pos in domain_iterator(domain):
         # ins_iters = list(MDIterator(inp, pos) for inp in ins)
@@ -292,7 +303,8 @@ def apply_stencil_offset_literal(
             ordered_indices = tuple(get_order_indices(out.axises, pos))
             out[ordered_indices] = r
 
-    _Shift.shift_impl = default_shift
+    playground_dispatch.pop_key()
+    # _Shift.shift_impl = default_shift
 
 
 # this is a hack for having sparse field, we can just pass extra dimensions and you get an array

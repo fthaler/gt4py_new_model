@@ -2,7 +2,7 @@ from typing import List, Union
 from eve import Node
 from eve.traits import SymbolName, SymbolTableTrait
 from eve.type_definitions import SymbolRef
-from unstructured.sym_validation import validate_symbol_refs
+from unstructured.util.sym_validation import validate_symbol_refs
 
 
 class Sym(Node):  # helper
