@@ -1,6 +1,6 @@
 from unstructured.dispatcher import Dispatcher
 
-__all__ = ["deref", "shift", "lift", "cartesian", "compose"]
+__all__ = ["deref", "shift", "lift", "cartesian", "compose", "if_"]
 
 builtin_dispatch = Dispatcher()
 
@@ -32,4 +32,9 @@ def cartesian(*args):
 
 @builtin_dispatch
 def compose(sten):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def if_(*args):
     raise BackendNotSelectedError()

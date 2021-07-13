@@ -15,10 +15,11 @@ class EmbeddedDSL(codegen.TemplatedGenerator):
     Sym = as_fmt("{id}")
     SymRef = as_fmt("{id}")
     IntLiteral = as_fmt("{value}")
+    FloatLiteral = as_fmt("{value}")
     OffsetLiteral = as_fmt("{value}")
     StringLiteral = as_fmt("{value}")
     FunCall = as_fmt("{fun}({','.join(args)})")
-    Lambda = as_mako("lambda ${','.join(params)}: return ${expr}")  # TODO capture
+    Lambda = as_mako("lambda ${','.join(params)}: ${expr}")
     StencilClosure = as_mako(
         "closure(${domain}, ${stencil}, [${','.join(outputs)}], [${','.join(inputs)}])"
     )

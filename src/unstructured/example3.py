@@ -26,9 +26,8 @@ def testee_swapped(output, input):
     closure(cartesian(0, 1, 0, 1), foo, [output], [input])
 
 
-# testee(*([None] * 2), backend="lisp")
-# testee(*([None] * 2), backend="cpptoy")
-# testee(*([None] * 2), backend="embedded")
+testee(*([None] * 2), backend="lisp")
+testee(*([None] * 2), backend="cpptoy")
 
 
 inp = np_as_located_field(I_loc, J_loc)(np.asarray([[0, 42], [1, 43]]))
@@ -41,6 +40,9 @@ print(out[0][0])
 
 testee(out, inp)
 print(out[0][0])
+
+testee(out, inp, backend="embedded")
+print(out[0, 0])
 
 
 @fundef

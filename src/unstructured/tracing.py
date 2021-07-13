@@ -41,8 +41,24 @@ def _patch_Expr():
         return make_node(other) + self
 
     @monkeypatch_method(Expr)
+    def __mul__(self, other):
+        return FunCall(fun=SymRef(id="mul"), args=[self, make_node(other)])
+
+    @monkeypatch_method(Expr)
+    def __rmul__(self, other):
+        return make_node(other) * self
+
+    @monkeypatch_method(Expr)
     def __sub__(self, other):
         return FunCall(fun=SymRef(id="minus"), args=[self, make_node(other)])
+
+    @monkeypatch_method(Expr)
+    def __gt__(self, other):
+        return FunCall(fun=SymRef(id="greater"), args=[self, make_node(other)])
+
+    @monkeypatch_method(Expr)
+    def __lt__(self, other):
+        return FunCall(fun=SymRef(id="less"), args=[self, make_node(other)])
 
     @monkeypatch_method(Expr)
     def __call__(self, *args):
@@ -106,6 +122,11 @@ def compose(*args):
 @unstructured.builtins.cartesian.register("tracing")
 def cartesian(*args):
     return _f("cartesian", *args)
+
+
+@unstructured.builtins.if_.register("tracing")
+def cartesian(*args):
+    return _f("if_", *args)
 
 
 # shift promotes its arguments to literals, therefore special

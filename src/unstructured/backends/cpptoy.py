@@ -9,6 +9,7 @@ class ToyCpp(codegen.TemplatedGenerator):
     Sym = as_fmt("{id}")
     SymRef = as_fmt("{id}")
     IntLiteral = as_fmt("{value}")
+    FloatLiteral = as_fmt("{value}")
 
     def visit_OffsetLiteral(self, node: OffsetLiteral, **kwargs):
         return node.value if isinstance(node.value, str) else f"{node.value}_c"

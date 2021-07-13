@@ -1,13 +1,7 @@
 import itertools
 from typing_extensions import runtime
 import unstructured
-from unstructured.builtins import (
-    builtin_dispatch,
-    lift,
-    shift,
-    deref,
-    cartesian,
-)
+from unstructured.builtins import builtin_dispatch, lift, shift, deref, cartesian, if_
 from unstructured.runtime import closure, offset
 from unstructured.utils import tupelize
 import numpy as np
@@ -44,6 +38,11 @@ def shift(*offsets):
 @deref.register(EMBEDDED)
 def deref(iter):
     return iter.deref()
+
+
+@if_.register(EMBEDDED)
+def if_(cond, t, f):
+    return t if cond else f
 
 
 @lift.register(EMBEDDED)

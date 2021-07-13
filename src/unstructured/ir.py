@@ -89,6 +89,10 @@ class Program(Node, SymbolTableTrait):
             "scan",
             "plus",
             "minus",
+            "mul",
+            "greater",
+            "less",
+            "if_",
         ]
     )
     _validate_symbol_refs = validate_symbol_refs()
