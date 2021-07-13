@@ -1,6 +1,5 @@
-from unstructured.builtins import deref, shift, lift, compose, cartesian
-from unstructured.runtime import fundef, fendef, closure, offset
-from devtools import debug
+from unstructured.builtins import *
+from unstructured.runtime import *
 
 
 @fundef
@@ -15,3 +14,4 @@ def testee(xs, xe, ys, ye, z, output, input):
 
 testee(*([None] * 7), backend="lisp")
 testee(*([None] * 7), backend="cpptoy")
+testee(*([None] * 7), backend="embedded")

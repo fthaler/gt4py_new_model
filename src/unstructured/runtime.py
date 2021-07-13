@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from unstructured.builtins import BackendNotSelectedError, builtin_dispatch
 from unstructured.dispatcher import Dispatcher
 
+__all__ = ["offset", "fundef", "fendef", "closure"]
+
 fun_fen_def_dispatch = Dispatcher()
 
 

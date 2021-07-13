@@ -1,5 +1,7 @@
 from unstructured.dispatcher import Dispatcher
 
+__all__ = ["deref", "shift", "lift", "cartesian", "compose"]
+
 builtin_dispatch = Dispatcher()
 
 
