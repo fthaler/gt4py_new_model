@@ -44,4 +44,6 @@ class ToyCpp(codegen.TemplatedGenerator):
         return formatted_code
 
 
-backend.register_backend("cpptoy", ToyCpp)
+backend.register_backend(
+    "cpptoy", lambda prog, *args, **kwargs: print(ToyCpp.apply(prog))
+)

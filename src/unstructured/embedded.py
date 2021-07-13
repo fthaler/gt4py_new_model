@@ -274,84 +274,56 @@ from unstructured.builtins import *
 from unstructured.runtime import *
 
 
-@unstructured.runtime.fendef.register(EMBEDDED)
-def fendef(offset_provider):
-    def impl(fun):
-        def impl2(*args):
-            @unstructured.builtins.shift.register(EMBEDDED)
-            def shift(*offsets):
-                def impl(iter):
-                    return iter.shift(
-                        *[
-                            offset
-                            if isinstance(offset, int)
-                            else offset_provider[offset.value]
-                            for offset in offsets
-                        ]
-                    )
+def fendef_embedded(fun, *args, **kwargs):
+    assert "offset_provider" in kwargs
 
-                return impl
+    @unstructured.builtins.shift.register(EMBEDDED)
+    def shift(*offsets):
+        def impl(iter):
+            return iter.shift(
+                *[
+                    offset
+                    if isinstance(offset, int)
+                    else kwargs["offset_provider"][offset.value]
+                    for offset in offsets
+                ]
+            )
 
-            fun(*args)
+        return impl
 
-        return impl2
-
-    return impl
+    fun(*args)
 
 
-@unstructured.runtime.fundef.register(EMBEDDED)
-def fundef(fun):
-    return fun
+unstructured.runtime.fundef_registry[None] = fendef_embedded
+
+# @unstructured.runtime.fendef.register(EMBEDDED)
+# def fendef(offset_provider):
+#     def impl(fun):
+#         def impl2(*args):
+#             @unstructured.builtins.shift.register(EMBEDDED)
+#             def shift(*offsets):
+#                 def impl(iter):
+#                     return iter.shift(
+#                         *[
+#                             offset
+#                             if isinstance(offset, int)
+#                             else offset_provider[offset.value]
+#                             for offset in offsets
+#                         ]
+#                     )
+
+#                 return impl
+
+#             fun(*args)
+
+#         return impl2
+
+#     return impl
 
 
-unstructured.runtime.fun_fen_def_dispatch.push_key(EMBEDDED)
+# @unstructured.runtime.fundef.register(EMBEDDED)
+# def fundef(fun):
+#     return fun
 
 
-I = offset("I")
-J = offset("J")
-
-
-@unstructured.runtime.fundef
-def foo(inp):
-    return deref(shift(J, 1)(inp))
-
-
-@unstructured.runtime.fendef({"I": I_loc, "J": J_loc})
-def testee(output, input):
-    closure(cartesian(0, 1, 0, 1), foo, [output], [input])
-
-
-@unstructured.runtime.fendef({"I": J_loc, "J": I_loc})
-def testee_swapped(output, input):
-    closure(cartesian(0, 1, 0, 1), foo, [output], [input])
-
-
-# testee(*([None] * 2), backend="lisp")
-# testee(*([None] * 2), backend="cpptoy")
-# testee(*([None] * 2), backend="embedded")
-
-
-inp = np_as_located_field(I_loc, J_loc)(np.asarray([[0, 42], [1, 43]]))
-out = np_as_located_field(I_loc, J_loc)(np.asarray([[-1]]))
-testee(out, inp)
-print(out[0][0])
-
-testee_swapped(out, inp)
-print(out[0][0])
-
-testee(out, inp)
-print(out[0][0])
-
-
-@unstructured.runtime.fundef
-def foo2(inp):
-    return deref(shift(I, J, 1, 1)(inp))
-
-
-@unstructured.runtime.fendef({"I": J_loc, "J": I_loc})
-def testee2(output, input):
-    closure(cartesian(0, 1, 0, 1), foo2, [output], [input])
-
-
-testee2(out, inp)
-print(out[0, 0])
+# unstructured.runtime.fun_fen_def_dispatch.push_key(EMBEDDED)

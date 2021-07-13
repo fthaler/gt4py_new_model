@@ -71,7 +71,7 @@ def execute_program(fencil: FencilDefinition, *args, **kwargs):
     )
     if kwargs["backend"] in backend._BACKENDS:
         b = backend.get_backend(kwargs["backend"])
-        print(b.apply(prog))
+        b(prog, *args, **kwargs)
     else:
         raise RuntimeError(f"Backend {kwargs['backend']} does not exist.")
 
@@ -159,7 +159,7 @@ def lambdadef(fun):
 def fundef(fun):
     @functools.wraps(fun)
     def _dispatcher(*args):
-        if Tracer.is_tracing:
+        if unstructured.builtins.builtin_dispatch.key == "tracing":
             res = FunctionDefinition(
                 id=fun.__name__,
                 params=list(
@@ -182,7 +182,6 @@ unstructured.runtime.fun_fen_def_dispatch.push_key("tracing")
 
 
 class Tracer:
-    is_tracing = False
     fundefs = []
     closures = []
 
@@ -196,14 +195,11 @@ class Tracer:
         cls.closures.append(closure)
 
     def __enter__(self):
-        assert not type(self).is_tracing
-        type(self).is_tracing = True
         unstructured.builtins.builtin_dispatch.push_key("tracing")
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         type(self).fundefs = []
         type(self).closures = []
-        type(self).is_tracing = False
         unstructured.builtins.builtin_dispatch.pop_key()
 
 
@@ -220,24 +216,42 @@ def closure(domain, stencil, outputs, inputs):
     )
 
 
-@unstructured.runtime.fendef.register("tracing")
-def fendef(fun):
-    @functools.wraps(fun)
-    def _dispatcher(*args, **kwargs):
-        if "backend" in kwargs:
-            with Tracer() as _:
-                trace_function_call(fun)
+def fendef_tracing(fun, *args, **kwargs):
+    with Tracer() as _:
+        trace_function_call(fun)
 
-                fencil = FencilDefinition(
-                    id=fun.__name__,
-                    params=list(
-                        Sym(id=param)
-                        for param in inspect.signature(fun).parameters.keys()
-                    ),
-                    closures=Tracer.closures,
-                )
-                execute_program(fencil, *args, **kwargs)
-        else:
-            return fun(*args)
+        fencil = FencilDefinition(
+            id=fun.__name__,
+            params=list(
+                Sym(id=param) for param in inspect.signature(fun).parameters.keys()
+            ),
+            closures=Tracer.closures,
+        )
+        execute_program(fencil, *args, **kwargs)
 
-    return _dispatcher
+
+unstructured.runtime.fundef_registry[
+    lambda kwargs: "backend" in kwargs
+] = fendef_tracing
+
+# @unstructured.runtime.fendef.register("tracing")
+# def fendef(fun):
+#     @functools.wraps(fun)
+#     def _dispatcher(*args, **kwargs):
+#         if "backend" in kwargs:
+#             with Tracer() as _:
+#                 trace_function_call(fun)
+
+#                 fencil = FencilDefinition(
+#                     id=fun.__name__,
+#                     params=list(
+#                         Sym(id=param)
+#                         for param in inspect.signature(fun).parameters.keys()
+#                     ),
+#                     closures=Tracer.closures,
+#                 )
+#                 execute_program(fencil, *args, **kwargs)
+#         else:
+#             return fun(*args)
+
+#     return _dispatcher

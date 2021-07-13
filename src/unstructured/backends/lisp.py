@@ -55,4 +55,6 @@ class ToLispLike(TemplatedGenerator):
         return formatted_code
 
 
-backend.register_backend("lisp", ToLispLike)
+backend.register_backend(
+    "lisp", lambda prog, *args, **kwargs: print(ToLispLike.apply(prog))
+)
