@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 from unstructured.builtins import BackendNotSelectedError, builtin_dispatch
 
-__all__ = ["offset", "fundef", "fendef", "closure"]
+__all__ = ["offset", "fundef", "fendef", "closure", "CartesianAxis"]
 
 
 @dataclass
@@ -13,6 +13,14 @@ class Offset:
 
 def offset(value):
     return Offset(value)
+
+
+@dataclass
+class CartesianAxis:
+    value: str
+
+    def __hash__(self) -> int:
+        return hash(self.value)
 
 
 fendef_registry = {}

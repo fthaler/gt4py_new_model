@@ -7,31 +7,18 @@ from unstructured.builtins import (
     shift,
     deref,
     cartesian,
+    cartesian_range,
     if_,
     minus,
     plus,
     mul,
     greater,
 )
-from unstructured.runtime import closure, offset
+from unstructured.runtime import CartesianAxis, closure, offset
 from unstructured.utils import tupelize
 import numpy as np
 
 EMBEDDED = "embedded"
-
-
-class CartesianAxis:
-    ...
-
-
-class I_loc(
-    CartesianAxis
-):  # make user definable, requires domain builtin to take these axis keys
-    ...
-
-
-class J_loc(CartesianAxis):
-    ...
 
 
 @deref.register(EMBEDDED)
@@ -77,8 +64,16 @@ def lift(stencil):
 
 
 @cartesian.register(EMBEDDED)
-def cartesian(is_, ie, js, je):
-    return {I_loc: range(is_, ie), J_loc: range(js, je)}
+def cartesian(*args):
+    domain = {}
+    for arg in args:
+        domain.update(arg)
+    return domain
+
+
+@cartesian_range.register(EMBEDDED)
+def cartesian_range(tag, start, end):
+    return {tag: range(start, end)}
 
 
 @minus.register(EMBEDDED)
@@ -115,7 +110,7 @@ def domain_iterator(domain):
 
 
 def execute_shift(pos, tag, index):
-    if issubclass(tag, CartesianAxis):
+    if isinstance(tag, CartesianAxis):
         assert tag in pos
         new_pos = pos.copy()
         new_pos[tag] += index

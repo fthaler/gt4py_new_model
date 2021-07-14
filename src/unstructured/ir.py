@@ -29,6 +29,10 @@ class OffsetLiteral(Expr):
     value: Union[int, str]
 
 
+class AxisLiteral(Expr):
+    value: str
+
+
 class SymRef(Expr):
     id: SymbolRef
 
@@ -82,6 +86,7 @@ class Program(Node, SymbolTableTrait):
         Sym(id=name)
         for name in [
             "cartesian",
+            "cartesian_range",
             "compose",
             "lift",
             "deref",

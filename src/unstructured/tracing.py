@@ -1,4 +1,7 @@
 import functools
+
+from numpy import isin
+from unstructured.runtime import CartesianAxis
 from typing import Any
 from typing_extensions import runtime
 from eve import Node
@@ -8,6 +11,7 @@ from unstructured.backend_executor import execute_program
 import unstructured.builtins
 import unstructured.runtime
 from unstructured.ir import (
+    AxisLiteral,
     Expr,
     FencilDefinition,
     FloatLiteral,
@@ -18,6 +22,7 @@ from unstructured.ir import (
     OffsetLiteral,
     Program,
     StencilClosure,
+    StringLiteral,
     Sym,
     SymRef,
 )
@@ -114,6 +119,11 @@ def cartesian(*args):
     return _f("cartesian", *args)
 
 
+@unstructured.builtins.cartesian_range.register("tracing")
+def cartesian_range(*args):
+    return _f("cartesian_range", *args)
+
+
 @unstructured.builtins.if_.register("tracing")
 def if_(*args):
     return _f("if_", *args)
@@ -163,6 +173,8 @@ def make_node(o):
         return IntLiteral(value=o)
     if isinstance(o, float):
         return FloatLiteral(value=o)
+    if isinstance(o, CartesianAxis):
+        return AxisLiteral(value=o.value)
     if isinstance(o, tuple):
         return tuple(make_node(arg) for arg in o)
     if isinstance(o, list):

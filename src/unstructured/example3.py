@@ -1,11 +1,13 @@
 from unstructured.builtins import *
 from unstructured.runtime import *
 
-from unstructured.embedded import np_as_located_field, I_loc, J_loc
+from unstructured.embedded import np_as_located_field
 import numpy as np
 
 I = offset("I")
 J = offset("J")
+I_loc = CartesianAxis("I_loc")
+J_loc = CartesianAxis("J_loc")
 
 
 @fundef
@@ -15,7 +17,12 @@ def foo(inp):
 
 @fendef(offset_provider={"I": I_loc, "J": J_loc})
 def testee(output, input):
-    closure(cartesian(0, 1, 0, 1), foo, [output], [input])
+    closure(
+        cartesian(cartesian_range(I_loc, 0, 1), cartesian_range(J_loc, 0, 1)),
+        foo,
+        [output],
+        [input],
+    )
 
 
 testee(None, None, backend="cpptoy")
@@ -23,7 +30,12 @@ testee(None, None, backend="cpptoy")
 
 @fendef(offset_provider={"I": J_loc, "J": I_loc})
 def testee_swapped(output, input):
-    closure(cartesian(0, 1, 0, 1), foo, [output], [input])
+    closure(
+        cartesian(cartesian_range(I_loc, 0, 1), cartesian_range(J_loc, 0, 1)),
+        foo,
+        [output],
+        [input],
+    )
 
 
 testee(*([None] * 2), backend="lisp")
@@ -52,7 +64,12 @@ def foo2(inp):
 
 @fendef(offset_provider={"I": J_loc, "J": I_loc})
 def testee2(output, input):
-    closure(cartesian(0, 1, 0, 1), foo2, [output], [input])
+    closure(
+        cartesian(cartesian_range(I_loc, 0, 1), cartesian_range(J_loc, 0, 1)),
+        foo2,
+        [output],
+        [input],
+    )
 
 
 testee2(out, inp)

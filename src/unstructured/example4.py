@@ -21,4 +21,3 @@ def testee(xs, xe, ys, ye, z, output, input):
 
 testee(*([None] * 7), backend="lisp")
 testee(*([None] * 7), backend="cpptoy")
-# testee(*([None] * 7), backend="embedded")

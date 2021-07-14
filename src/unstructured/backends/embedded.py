@@ -1,7 +1,7 @@
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from eve.concepts import Node
-from unstructured.ir import OffsetLiteral
+from unstructured.ir import AxisLiteral, OffsetLiteral
 from unstructured.backends import backend
 import tempfile
 import importlib.util
@@ -14,6 +14,7 @@ class EmbeddedDSL(codegen.TemplatedGenerator):
     IntLiteral = as_fmt("{value}")
     FloatLiteral = as_fmt("{value}")
     OffsetLiteral = as_fmt("{value}")
+    AxisLiteral = as_fmt("{value}")
     StringLiteral = as_fmt("{value}")
     FunCall = as_fmt("{fun}({','.join(args)})")
     Lambda = as_mako("lambda ${','.join(params)}: ${expr}")
@@ -52,14 +53,19 @@ def executor(ir: Node, *args, **kwargs):
         .if_isinstance(str)
         .to_set()
     )
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=True) as tmp:
+    axis_literals = ir.iter_tree().if_isinstance(AxisLiteral).getattr("value").to_set()
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as tmp:
         header = """
 from unstructured.builtins import *
 from unstructured.runtime import *
 """
         offset_literals = [f'{l} = offset("{l}")' for l in offset_literals]
+        axis_literals = [f'{l} = CartesianAxis("{l}")' for l in axis_literals]
         tmp.write(header)
         tmp.write("\n".join(offset_literals))
+        tmp.write("\n")
+        tmp.write("\n".join(axis_literals))
+        tmp.write("\n")
         tmp.write(program)
         tmp.flush()
 
