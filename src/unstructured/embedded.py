@@ -19,8 +19,7 @@ import numpy as np
 
 EMBEDDED = "embedded"
 
-# def _shift_impl(pos, offset):
-#     if isinstance(offset, St)
+
 class CartesianAxis:
     ...
 
@@ -33,17 +32,6 @@ class I_loc(
 
 class J_loc(CartesianAxis):
     ...
-
-
-@shift.register(EMBEDDED)
-def shift(*offsets):
-    def impl(iter):
-        return iter.shift(
-            *offsets
-        )  # could be removed as only during execution we know what shift does
-
-    return impl
-    # raise RuntimeError("shift is not configured")
 
 
 @deref.register(EMBEDDED)
@@ -300,10 +288,6 @@ def np_as_located_field(*axises, origin=None):
     return _maker
 
 
-from unstructured.builtins import *
-from unstructured.runtime import *
-
-
 def fendef_embedded(fun, *args, **kwargs):
     assert "offset_provider" in kwargs
 
@@ -324,36 +308,4 @@ def fendef_embedded(fun, *args, **kwargs):
     fun(*args)
 
 
-unstructured.runtime.fundef_registry[None] = fendef_embedded
-
-# @unstructured.runtime.fendef.register(EMBEDDED)
-# def fendef(offset_provider):
-#     def impl(fun):
-#         def impl2(*args):
-#             @unstructured.builtins.shift.register(EMBEDDED)
-#             def shift(*offsets):
-#                 def impl(iter):
-#                     return iter.shift(
-#                         *[
-#                             offset
-#                             if isinstance(offset, int)
-#                             else offset_provider[offset.value]
-#                             for offset in offsets
-#                         ]
-#                     )
-
-#                 return impl
-
-#             fun(*args)
-
-#         return impl2
-
-#     return impl
-
-
-# @unstructured.runtime.fundef.register(EMBEDDED)
-# def fundef(fun):
-#     return fun
-
-
-# unstructured.runtime.fun_fen_def_dispatch.push_key(EMBEDDED)
+unstructured.runtime.fendef_registry[None] = fendef_embedded

@@ -95,7 +95,7 @@ def _s(id):
 
 
 def trace_function_argument(arg):
-    if isinstance(arg, FundefDispatcher):
+    if isinstance(arg, unstructured.runtime.FundefDispatcher):
         make_function_definition(arg.fun)
         return _s(arg.fun.__name__)
     return arg
@@ -214,25 +214,19 @@ def make_function_definition(fun):
     return res
 
 
-class FundefDispatcher:
-    def __init__(self, fun) -> None:
-        self.fun = fun
-        self.__name__ = fun.__name__
-
-    def __call__(self, *args):
-        if unstructured.builtins.builtin_dispatch.key == "tracing":
-            res = make_function_definition(self.fun)
+class FundefTracer:
+    def __call__(self, fundef_dispatcher: unstructured.runtime.FundefDispatcher):
+        def fun(*args):
+            res = make_function_definition(fundef_dispatcher.fun)
             return res(*args)
-        else:
-            return self.fun(*args)
+
+        return fun
+
+    def __bool__(self):
+        return unstructured.builtins.builtin_dispatch.key == "tracing"
 
 
-@unstructured.runtime.fundef.register("tracing")
-def fundef(fun):
-    return FundefDispatcher(fun)
-
-
-unstructured.runtime.fun_fen_def_dispatch.push_key("tracing")
+unstructured.runtime.FundefDispatcher.register_tracing_hook(FundefTracer())
 
 
 class Tracer:
@@ -286,6 +280,6 @@ def fendef_tracing(fun, *args, **kwargs):
     execute_program(fencil, fundefs, *args, **kwargs)
 
 
-unstructured.runtime.fundef_registry[
+unstructured.runtime.fendef_registry[
     lambda kwargs: "backend" in kwargs
 ] = fendef_tracing
