@@ -1,11 +1,14 @@
 from unstructured.builtins import *
 from unstructured.runtime import *
-from unstructured.embedded import I_loc, J_loc, np_as_located_field
+from unstructured.embedded import np_as_located_field
 import numpy as np
 from .hdiff_reference import hdiff_reference
 
 I = offset("I")
 J = offset("J")
+
+IDim = CartesianAxis("IDim")
+JDim = CartesianAxis("JDim")
 
 
 @fundef
@@ -48,9 +51,14 @@ def hdiff_sten(inp, coeff):
     )
 
 
-@fendef(offset_provider={"I": I_loc, "J": J_loc})
+@fendef(offset_provider={"I": IDim, "J": JDim})
 def hdiff(inp, coeff, out, x, y):
-    closure(cartesian(0, x, 0, y), hdiff_sten, [out], [inp, coeff])
+    closure(
+        cartesian(cartesian_range(IDim, 0, x), cartesian_range(JDim, 0, y)),
+        hdiff_sten,
+        [out],
+        [inp, coeff],
+    )
 
 
 hdiff(*([None] * 5), backend="lisp")
@@ -61,9 +69,9 @@ def test_hdiff(hdiff_reference):
     inp, coeff, out = hdiff_reference
     shape = (out.shape[0], out.shape[1])
 
-    inp_s = np_as_located_field(I_loc, J_loc, origin={I_loc: 2, J_loc: 2})(inp[:, :, 0])
-    coeff_s = np_as_located_field(I_loc, J_loc)(coeff[:, :, 0])
-    out_s = np_as_located_field(I_loc, J_loc)(np.zeros_like(coeff[:, :, 0]))
+    inp_s = np_as_located_field(IDim, JDim, origin={IDim: 2, JDim: 2})(inp[:, :, 0])
+    coeff_s = np_as_located_field(IDim, JDim)(coeff[:, :, 0])
+    out_s = np_as_located_field(IDim, JDim)(np.zeros_like(coeff[:, :, 0]))
 
     # hdiff(inp_s, coeff_s, out_s, shape[0], shape[1])
     # hdiff(inp_s, coeff_s, out_s, shape[0], shape[1], backend="embedded")
