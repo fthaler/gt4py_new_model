@@ -43,21 +43,25 @@ def fendef(*dec_args, **dec_kwargs):
 
 
 class FundefDispatcher:
-    tracing_hook = None
+    _hook = None
+    # hook is an object that
+    # - evaluates to true if it should be used,
+    # - is callable with an instance of FundefDispatcher
+    # - returns callable that takes the function arguments
 
     def __init__(self, fun) -> None:
         self.fun = fun
         self.__name__ = fun.__name__
 
     def __call__(self, *args):
-        if type(self).tracing_hook:
-            return type(self).tracing_hook(self)(*args)
+        if type(self)._hook:
+            return type(self)._hook(self)(*args)
         else:
             return self.fun(*args)
 
     @classmethod
     def register_tracing_hook(cls, hook):
-        cls.tracing_hook = hook
+        cls._hook = hook
 
 
 def fundef(fun):
