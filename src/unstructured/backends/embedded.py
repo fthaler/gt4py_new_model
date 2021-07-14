@@ -54,7 +54,12 @@ def executor(ir: Node, *args, **kwargs):
         .to_set()
     )
     axis_literals = ir.iter_tree().if_isinstance(AxisLiteral).getattr("value").to_set()
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as tmp:
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        suffix=".py",
+        delete=not ("debug" in kwargs and kwargs["debug"] == True),
+    ) as tmp:
+        print(tmp.name)
         header = """
 from unstructured.builtins import *
 from unstructured.runtime import *

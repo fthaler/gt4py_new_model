@@ -75,5 +75,5 @@ def testee2(output, input):
 testee2(out, inp)
 print(out[0, 0])
 
-testee2(out, inp, backend="embedded")
+testee2(out, inp, backend="embedded", debug=True)
 print(out[0, 0])
