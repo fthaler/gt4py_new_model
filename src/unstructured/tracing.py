@@ -77,14 +77,12 @@ def _patch_FunctionDefinition():
 _patch_FunctionDefinition()
 
 
-def execute_program(fencil: FencilDefinition, *args, **kwargs):
+def execute_program(fencil: FencilDefinition, fundefs, *args, **kwargs):
     assert "backend" in kwargs
     if not len(args) == len(fencil.params):
         raise RuntimeError("Incorrect number of arguments")
 
-    prog = Program(
-        function_definitions=Tracer.fundefs, fencil_definitions=[fencil], setqs=[]
-    )
+    prog = Program(function_definitions=fundefs, fencil_definitions=[fencil], setqs=[])
     if kwargs["backend"] in backend._BACKENDS:
         b = backend.get_backend(kwargs["backend"])
         b(prog, *args, **kwargs)
@@ -96,10 +94,18 @@ def _s(id):
     return SymRef(id=id)
 
 
+def trace_function_argument(arg):
+    if isinstance(arg, FundefDispatcher):
+        make_function_definition(arg.fun)
+        return _s(arg.fun.__name__)
+    return arg
+
+
 def _f(fun, *args):
     if isinstance(fun, str):
         fun = _s(fun)
 
+    args = [trace_function_argument(arg) for arg in args]
     return FunCall(fun=fun, args=[*make_node(args)])
 
 
@@ -125,7 +131,7 @@ def cartesian(*args):
 
 
 @unstructured.builtins.if_.register("tracing")
-def cartesian(*args):
+def if_(*args):
     return _f("if_", *args)
 
 
@@ -138,6 +144,26 @@ def shift(*offsets):
     return _f("shift", *offsets)
 
 
+@unstructured.builtins.plus.register("tracing")
+def plus(*args):
+    return _f("plus", *args)
+
+
+@unstructured.builtins.minus.register("tracing")
+def minus(*args):
+    return _f("minus", *args)
+
+
+@unstructured.builtins.mul.register("tracing")
+def mul(*args):
+    return _f("mul", *args)
+
+
+@unstructured.builtins.greater.register("tracing")
+def greater(*args):
+    return _f("greater", *args)
+
+
 # helpers
 def make_node(o):
     if isinstance(o, Node):
@@ -145,7 +171,7 @@ def make_node(o):
     if callable(o):
         if o.__name__ == "<lambda>":
             return lambdadef(o)
-        if o.__code__.co_flags & inspect.CO_NESTED:
+        if hasattr(o, "__code__") and o.__code__.co_flags & inspect.CO_NESTED:
             return lambdadef(o)
     if isinstance(o, unstructured.runtime.Offset):
         return OffsetLiteral(value=o.value)
@@ -176,30 +202,37 @@ def lambdadef(fun):
     )
 
 
-@unstructured.runtime.fundef.register("tracing")
-def fundef(fun):
-    @functools.wraps(fun)
-    def _dispatcher(*args):
+def make_function_definition(fun):
+    res = FunctionDefinition(
+        id=fun.__name__,
+        params=list(
+            Sym(id=param) for param in inspect.signature(fun).parameters.keys()
+        ),
+        expr=trace_function_call(fun),
+    )
+    Tracer.add_fundef(res)
+    return res
+
+
+class FundefDispatcher:
+    def __init__(self, fun) -> None:
+        self.fun = fun
+        self.__name__ = fun.__name__
+
+    def __call__(self, *args):
         if unstructured.builtins.builtin_dispatch.key == "tracing":
-            res = FunctionDefinition(
-                id=fun.__name__,
-                params=list(
-                    Sym(id=param) for param in inspect.signature(fun).parameters.keys()
-                ),
-                expr=trace_function_call(fun),
-            )
-            Tracer.add_fundef(res)
+            res = make_function_definition(self.fun)
             return res(*args)
         else:
-            return fun(*args)
+            return self.fun(*args)
 
-    return _dispatcher
+
+@unstructured.runtime.fundef.register("tracing")
+def fundef(fun):
+    return FundefDispatcher(fun)
 
 
 unstructured.runtime.fun_fen_def_dispatch.push_key("tracing")
-
-
-# TODO Context manager from stdlib "contextlib"
 
 
 class Tracer:
@@ -248,31 +281,11 @@ def fendef_tracing(fun, *args, **kwargs):
             ),
             closures=Tracer.closures,
         )
-        execute_program(fencil, *args, **kwargs)
+        fundefs = Tracer.fundefs
+    # after tracing is done
+    execute_program(fencil, fundefs, *args, **kwargs)
 
 
 unstructured.runtime.fundef_registry[
     lambda kwargs: "backend" in kwargs
 ] = fendef_tracing
-
-# @unstructured.runtime.fendef.register("tracing")
-# def fendef(fun):
-#     @functools.wraps(fun)
-#     def _dispatcher(*args, **kwargs):
-#         if "backend" in kwargs:
-#             with Tracer() as _:
-#                 trace_function_call(fun)
-
-#                 fencil = FencilDefinition(
-#                     id=fun.__name__,
-#                     params=list(
-#                         Sym(id=param)
-#                         for param in inspect.signature(fun).parameters.keys()
-#                     ),
-#                     closures=Tracer.closures,
-#                 )
-#                 execute_program(fencil, *args, **kwargs)
-#         else:
-#             return fun(*args)
-
-#     return _dispatcher

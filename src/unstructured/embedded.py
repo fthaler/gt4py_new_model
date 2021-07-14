@@ -1,7 +1,18 @@
 import itertools
 from typing_extensions import runtime
 import unstructured
-from unstructured.builtins import builtin_dispatch, lift, shift, deref, cartesian, if_
+from unstructured.builtins import (
+    builtin_dispatch,
+    lift,
+    shift,
+    deref,
+    cartesian,
+    if_,
+    minus,
+    plus,
+    mul,
+    greater,
+)
 from unstructured.runtime import closure, offset
 from unstructured.utils import tupelize
 import numpy as np
@@ -52,8 +63,8 @@ def lift(stencil):
             def __init__(self, *, offsets=[]) -> None:
                 self.offsets = offsets
 
-            def shift(self, offset):
-                return wrap_iterator(offsets=[*self.offsets, offset])
+            def shift(self, *offsets):
+                return wrap_iterator(offsets=[*self.offsets, *offsets])
 
             # def get_max_number_of_neighbors(self):
             #     for o in reversed(self.offsets):
@@ -80,6 +91,26 @@ def lift(stencil):
 @cartesian.register(EMBEDDED)
 def cartesian(is_, ie, js, je):
     return {I_loc: range(is_, ie), J_loc: range(js, je)}
+
+
+@minus.register(EMBEDDED)
+def minus(first, second):
+    return first - second
+
+
+@plus.register(EMBEDDED)
+def plus(first, second):
+    return first + second
+
+
+@mul.register(EMBEDDED)
+def mul(first, second):
+    return first * second
+
+
+@greater.register(EMBEDDED)
+def greater(first, second):
+    return first > second
 
 
 def named_range(axis, range):

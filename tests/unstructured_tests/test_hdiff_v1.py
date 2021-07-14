@@ -1,138 +1,72 @@
-import math
+from unstructured.builtins import *
+from unstructured.runtime import *
+from unstructured.embedded import I_loc, J_loc, np_as_located_field
 import numpy as np
-from unstructured.concepts import (
-    apply_stencil,
-    element_access_to_field,
-    if_,
-)
-from unstructured.helpers import (
-    array_as_field,
-    as_1d,
-    as_2d,
-    constant_field,
-)
-
-from unstructured.utils import (
-    Dimension,
-    get_index_of_type,
-    remove_indices_of_axises,
-    axis,
-)
 from .hdiff_reference import hdiff_reference
 
-
-@axis()
-class Vertex:
-    pass
+I = offset("I")
+J = offset("J")
 
 
-@axis(aliases=["center", "right", "left", "bottom", "top"])
-class FP:
-    pass
-
-
-def test_FP():
-    assert FP.center == FP(0)
-
-
-def make_fivepoint(shape_2d):
-    strides = [1, shape_2d[1]]
-
-    class v2v_conn:
-        def __call__(self, field):
-            def shift(field_index, fp_index):
-                if fp_index == FP.center:
-                    return field_index.__index__()
-                elif fp_index == FP.right:
-                    return field_index.__index__() + strides[0]
-                elif fp_index == FP.left:
-                    return field_index.__index__() - strides[0]
-                elif fp_index == FP.bottom:
-                    return field_index.__index__() + strides[1]
-                elif fp_index == FP.top:
-                    return field_index.__index__() - strides[1]
-                else:
-                    assert False
-
-            @element_access_to_field(
-                dimensions=field.dimensions + (Dimension(FP, 5),),
-                element_type=field.element_type,
-            )
-            def elem_access(indices):
-                v_index = get_index_of_type(Vertex)(indices)
-                fp_index = get_index_of_type(FP)(indices)
-
-                replaced_index = Vertex(shift(v_index, fp_index))
-                new_indices = (replaced_index,) + remove_indices_of_axises(
-                    (FP, Vertex), indices
-                )
-                return field[new_indices]
-
-            return elem_access
-
-    return v2v_conn()
-
-
-def laplacian(conn, inp):
-    five_point = conn(inp)
-    return -4 * five_point[FP.center] + (
-        five_point[FP.right]
-        + five_point[FP.left]
-        + five_point[FP.top]
-        + five_point[FP.bottom]
+@fundef
+def laplacian(inp):
+    return -4.0 * deref(inp) + (
+        deref(shift(I, 1)(inp))
+        + deref(shift(I, -1)(inp))
+        + deref(shift(J, 1)(inp))
+        + deref(shift(J, -1)(inp))
     )
 
 
-def hdiff_flux_x(conn, inp):
-    lap = conn(laplacian(conn, inp))
-    flux = lap[FP.center] - lap[FP.right]
+@fundef
+def flux(d):
+    def flux_impl(inp):
+        lap = lift(laplacian)(inp)
+        flux = deref(lap) - deref(shift(d, 1)(lap))
+        return if_(flux * (deref(shift(d, 1)(inp)) - deref(inp)) > 0.0, 0.0, flux)
 
-    neighs = conn(inp)
-    return if_(
-        flux * (neighs[FP.right] - neighs[FP.center]) > constant_field(Vertex)(0.0),
-        constant_field(Vertex)(0.0),
-        flux,
+    return flux_impl
+
+
+@fundef
+def flux_I(inp):
+    return flux(I)(inp)
+
+
+@fundef
+def hdiff_sten(inp, coeff):
+    flx = lift(flux(I))(inp)
+    fly = lift(flux(J))(inp)
+    return deref(inp) - (
+        deref(coeff)
+        * (
+            deref(flx)
+            - deref(shift(I, -1)(flx))
+            + deref(fly)
+            - deref(shift(J, -1)(fly))
+        )
     )
 
 
-def hdiff_flux_y(conn, inp):
-    lap = conn(laplacian(conn, inp))
-    flux = lap[FP.center] - lap[FP.bottom]
-
-    neighs = conn(inp)
-    return if_(
-        flux * (neighs[FP.bottom] - neighs[FP.center]) > constant_field(Vertex)(0.0),
-        constant_field(Vertex)(0.0),
-        flux,
-    )
+@fendef(offset_provider={"I": I_loc, "J": J_loc})
+def hdiff(inp, coeff, out, x, y):
+    closure(cartesian(0, x, 0, y), hdiff_sten, [out], [inp, coeff])
 
 
-def hdiff(conn, inp, coeff):
-    flx = conn(hdiff_flux_x(conn, inp))
-    fly = conn(hdiff_flux_y(conn, inp))
-    return inp - (
-        coeff * (flx[FP.center] - flx[FP.left] + fly[FP.center] - fly[FP.top])
-    )
+hdiff(*([None] * 5), backend="lisp")
+hdiff(*([None] * 5), backend="cpptoy")
 
 
 def test_hdiff(hdiff_reference):
     inp, coeff, out = hdiff_reference
-    shape = (inp.shape[0], inp.shape[1])
-    inp_s = array_as_field(Vertex)(as_1d(inp[:, :, 0]))
-    coeff_full_domain = np.zeros(shape)
-    coeff_full_domain[2:-2, 2:-2] = coeff[:, :, 0]
-    coeff_s = array_as_field(Vertex)(as_1d(coeff_full_domain))
-    out_s = as_1d(np.zeros_like(inp)[:, :, 0])
+    shape = (out.shape[0], out.shape[1])
 
-    domain = np.arange(math.prod(shape))
-    domain_2d = as_2d(domain, shape)
-    inner_domain = [(as_1d(domain_2d[2:-2, 2:-2]).tolist(), Vertex)]
+    inp_s = np_as_located_field(I_loc, J_loc, origin={I_loc: 2, J_loc: 2})(inp[:, :, 0])
+    coeff_s = np_as_located_field(I_loc, J_loc)(coeff[:, :, 0])
+    out_s = np_as_located_field(I_loc, J_loc)(np.zeros_like(coeff[:, :, 0]))
 
-    apply_stencil(
-        hdiff,
-        inner_domain,
-        [make_fivepoint(shape), inp_s, coeff_s],
-        [out_s],
-    )
+    # hdiff(inp_s, coeff_s, out_s, shape[0], shape[1])
+    # hdiff(inp_s, coeff_s, out_s, shape[0], shape[1], backend="embedded")
+    hdiff(inp_s, coeff_s, out_s, shape[0], shape[1], backend="double_roundtrip")
 
-    assert np.allclose(out[:, :, 0], np.asarray(as_2d(out_s, shape)[2:-2, 2:-2]))
+    assert np.allclose(out[:, :, 0], out_s)

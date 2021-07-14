@@ -1,4 +1,3 @@
-from typing import Any
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from eve.concepts import Node
@@ -6,8 +5,6 @@ from unstructured.ir import OffsetLiteral
 from unstructured.backends import backend
 import tempfile
 import importlib.util
-
-from unstructured.runtime import Offset
 import unstructured
 
 
@@ -27,7 +24,7 @@ class EmbeddedDSL(codegen.TemplatedGenerator):
         """
 @fendef
 def ${id}(${','.join(params)}):
-    ${'\\n'.join(closures)}
+    ${'\\n    '.join(closures)}
     """
     )
     FunctionDefinition = as_mako(
@@ -43,7 +40,7 @@ def ${id}(${','.join(params)}):
     )
 
 
-from devtools import debug
+_BACKEND_NAME = "embedded"
 
 
 def executor(ir: Node, *args, **kwargs):
@@ -74,9 +71,16 @@ from unstructured.runtime import *
         fencil = getattr(foo, fencil_name)
         assert "offset_provider" in kwargs
 
-        unstructured.builtins.builtin_dispatch.push_key("embedded")
-        fencil(*args, offset_provider=kwargs["offset_provider"])
-        unstructured.builtins.builtin_dispatch.pop_key()
+        if not "dispatch_backend" in kwargs:
+            unstructured.builtins.builtin_dispatch.push_key("embedded")
+            fencil(*args, offset_provider=kwargs["offset_provider"])
+            unstructured.builtins.builtin_dispatch.pop_key()
+        else:
+            fencil(
+                *args,
+                offset_provider=kwargs["offset_provider"],
+                backend=kwargs["dispatch_backend"],
+            )
 
 
-backend.register_backend("embedded", executor)
+backend.register_backend(_BACKEND_NAME, executor)

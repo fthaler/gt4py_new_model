@@ -1,6 +1,17 @@
 from unstructured.dispatcher import Dispatcher
 
-__all__ = ["deref", "shift", "lift", "cartesian", "compose", "if_"]
+__all__ = [
+    "deref",
+    "shift",
+    "lift",
+    "cartesian",
+    "compose",
+    "if_",
+    "minus",
+    "plus",
+    "mul",
+    "greater",
+]
 
 builtin_dispatch = Dispatcher()
 
@@ -37,4 +48,24 @@ def compose(sten):
 
 @builtin_dispatch
 def if_(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def minus(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def plus(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def mul(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def greater(*args):
     raise BackendNotSelectedError()
