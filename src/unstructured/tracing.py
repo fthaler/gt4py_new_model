@@ -4,6 +4,7 @@ from typing_extensions import runtime
 from eve import Node
 from devtools import debug
 import inspect
+from unstructured.backend_executor import execute_program
 import unstructured.builtins
 import unstructured.runtime
 from unstructured.ir import (
@@ -68,26 +69,9 @@ def _patch_Expr():
 _patch_Expr()
 
 
-def _patch_FunctionDefinition():
-    @monkeypatch_method(FunctionDefinition)
+class PatchedFunctionDefinition(FunctionDefinition):
     def __call__(self, *args):
         return FunCall(fun=SymRef(id=str(self.id)), args=[*make_node(args)])
-
-
-_patch_FunctionDefinition()
-
-
-def execute_program(fencil: FencilDefinition, fundefs, *args, **kwargs):
-    assert "backend" in kwargs
-    if not len(args) == len(fencil.params):
-        raise RuntimeError("Incorrect number of arguments")
-
-    prog = Program(function_definitions=fundefs, fencil_definitions=[fencil], setqs=[])
-    if kwargs["backend"] in backend._BACKENDS:
-        b = backend.get_backend(kwargs["backend"])
-        b(prog, *args, **kwargs)
-    else:
-        raise RuntimeError(f"Backend {kwargs['backend']} does not exist.")
 
 
 def _s(id):
@@ -203,7 +187,7 @@ def lambdadef(fun):
 
 
 def make_function_definition(fun):
-    res = FunctionDefinition(
+    res = PatchedFunctionDefinition(
         id=fun.__name__,
         params=list(
             Sym(id=param) for param in inspect.signature(fun).parameters.keys()
@@ -275,9 +259,11 @@ def fendef_tracing(fun, *args, **kwargs):
             ),
             closures=Tracer.closures,
         )
-        fundefs = Tracer.fundefs
+        prog = Program(
+            function_definitions=Tracer.fundefs, fencil_definitions=[fencil], setqs=[]
+        )
     # after tracing is done
-    execute_program(fencil, fundefs, *args, **kwargs)
+    execute_program(prog, *args, **kwargs)
 
 
 unstructured.runtime.fendef_registry[
