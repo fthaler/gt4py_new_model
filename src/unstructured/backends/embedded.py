@@ -45,6 +45,8 @@ _BACKEND_NAME = "embedded"
 
 
 def executor(ir: Node, *args, **kwargs):
+    debug = "debug" in kwargs and kwargs["debug"] == True
+
     program = EmbeddedDSL.apply(ir)
     offset_literals = (
         ir.iter_tree()
@@ -57,9 +59,10 @@ def executor(ir: Node, *args, **kwargs):
     with tempfile.NamedTemporaryFile(
         mode="w",
         suffix=".py",
-        delete=not ("debug" in kwargs and kwargs["debug"] == True),
+        delete=not debug,
     ) as tmp:
-        print(tmp.name)
+        if debug:
+            print(tmp.name)
         header = """
 from unstructured.builtins import *
 from unstructured.runtime import *

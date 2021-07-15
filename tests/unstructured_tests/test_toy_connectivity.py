@@ -21,6 +21,21 @@ Edge = CartesianAxis("Edge")
 # 6 - 7 - 8 -    6 7 8
 # |   |   |      15 16 17
 
+
+v2v_arr = np.array(
+    [
+        [1, 3, 2, 6],
+        [2, 3, 0, 7],
+        [0, 5, 1, 8],
+        [4, 6, 5, 0],
+        [5, 7, 3, 1],
+        [3, 8, 4, 2],
+        [7, 0, 8, 3],
+        [8, 1, 6, 4],
+        [6, 2, 7, 5],
+    ]
+)
+
 e2v_arr = np.array(
     [
         [0, 1],
@@ -124,7 +139,7 @@ def sparse_stencil(inp):
     return reduce(lambda a, b: a + b, 0)(inp)
 
 
-@fendef(offset_provider={"V2E": NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4)})
+@fendef
 def sparse_fencil(inp, out):
     closure(
         domain(named_range(Vertex, 0, 9)),
@@ -140,6 +155,132 @@ def test_sparse_input_field():
 
     ref = np.ones([9]) * 10
 
-    sparse_fencil(inp, out, backend="double_roundtrip")
+    sparse_fencil(
+        inp,
+        out,
+        backend="double_roundtrip",
+        offset_provider={"V2E": NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4)},
+    )
 
     assert allclose(out, ref)
+
+
+V2V = offset("V2V")
+
+
+def test_sparse_input_field_v2v():
+    inp = np_as_located_field(Vertex, V2V)(v2v_arr)
+    out = np_as_located_field(Vertex)(np.zeros([9]))
+
+    ref = np.asarray(list(sum(row) for row in v2v_arr))
+
+    sparse_fencil(
+        inp,
+        out,
+        backend="double_roundtrip",
+        offset_provider={
+            "V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4)
+        },
+    )
+
+    assert allclose(out, ref)
+
+
+@fundef
+def deref_stencil(inp):
+    return deref(shift(V2V, 0)(inp))
+
+
+@fundef
+def lift_stencil(inp):
+    return deref(shift(V2V, 2)(lift(deref_stencil)(inp)))
+
+
+@fendef
+def lift_fencil(inp, out):
+    closure(domain(named_range(Vertex, 0, 9)), lift_stencil, [out], [inp])
+
+
+def test_lift():
+    inp = index_field(Vertex)
+    out = np_as_located_field(Vertex)(np.zeros([9]))
+    ref = np.asarray(np.asarray(range(9)))
+
+    lift_fencil(None, None, backend="cpptoy")
+    lift_fencil(
+        inp,
+        out,
+        backend="double_roundtrip",
+        offset_provider={
+            "V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4)
+        },
+    )
+    assert allclose(out, ref)
+
+
+@fundef
+def sparse_shifted_stencil(inp):
+    return deref(shift(0, 2)(shift(V2V)(inp)))
+
+
+@fendef
+def sparse_shifted_fencil(inp, out):
+    closure(
+        domain(named_range(Vertex, 0, 9)),
+        sparse_shifted_stencil,
+        [out],
+        [inp],
+    )
+
+
+def test_shift_sparse_input_field():
+    inp = np_as_located_field(Vertex, V2V)(v2v_arr)
+    out = np_as_located_field(Vertex)(np.zeros([9]))
+    ref = np.asarray(np.asarray(range(9)))
+
+    sparse_shifted_fencil(
+        inp,
+        out,
+        # backend="double_roundtrip",
+        offset_provider={
+            "V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4)
+        },
+    )
+
+    assert allclose(out, ref)
+
+
+# @fundef
+# def sparse_shifted_stencil_reduce(inp):
+#     def sum_(a, b):
+#         return a + b
+
+#     return reduce(sum_, 0)(shift(V2V)(lift(reduce(sum_, 0))(inp)))
+
+
+# @fendef
+# def sparse_shifted_fencil_reduce(inp, out):
+#     closure(
+#         domain(named_range(Vertex, 0, 9)),
+#         sparse_shifted_stencil_reduce,
+#         [out],
+#         [inp],
+#     )
+
+
+# def test_shift_sparse_input_field():
+#     inp = np_as_located_field(Vertex, V2V)(v2v_arr)
+#     out = np_as_located_field(Vertex)(np.zeros([9]))
+
+#     ref = np.asarray(list(sum(row) for row in v2v_arr))
+
+#     sparse_shifted_fencil_reduce(
+#         inp,
+#         out,
+#         backend="double_roundtrip",
+#         offset_provider={
+#             "V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4)
+#         },
+#     )
+
+#     assert allclose(out, ref)

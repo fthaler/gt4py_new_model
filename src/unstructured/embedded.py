@@ -50,11 +50,15 @@ def lift(stencil):
             def shift(self, *offsets):
                 return wrap_iterator(offsets=[*self.offsets, *offsets])
 
-            # def get_max_number_of_neighbors(self):
-            #     for o in reversed(self.offsets):
-            #         if isinstance(o, OffsetGroup):
-            #             return len(o.offsets)
-            #     raise RuntimeError("Error")
+            def max_neighbors(self):
+                # TODO cleanup, test edge cases
+                open_offsets = get_open_offsets(*self.offsets)
+                assert open_offsets
+                assert isinstance(
+                    args[0].offset_provider[open_offsets[0].value],
+                    NeighborTableOffsetProvider,
+                )
+                return args[0].offset_provider[open_offsets[0].value].max_neighbors
 
             def deref(self):
                 shifted_args = args
@@ -146,10 +150,10 @@ def domain_iterator(domain):
 
 
 def execute_shift(pos, tag, index, *, offset_provider):
-    if tag in pos:  # sparse field with offset as neighbor dimension
-        # TODO think of sparse field which is additionally shifted in the sparse direction with the same offset
+    if (
+        tag in pos and pos[tag] is None
+    ):  # sparse field with offset as neighbor dimension
         new_pos = pos.copy()
-        assert new_pos[tag] is None
         new_pos[tag] = index
         return new_pos
     assert tag.value in offset_provider
@@ -261,6 +265,7 @@ class MDIterator:
 
 def make_in_iterator(inp, pos, offset_provider):
     sparse_dimensions = [axis for axis in inp.axises if isinstance(axis, Offset)]
+    assert len(sparse_dimensions) <= 1  # TODO multiple is not a current use case
     new_pos = pos.copy()
     for axis in sparse_dimensions:
         new_pos[axis] = None
