@@ -1,4 +1,5 @@
 import itertools
+
 import unstructured
 from unstructured.builtins import (
     builtin_dispatch,
@@ -14,7 +15,7 @@ from unstructured.builtins import (
     mul,
     greater,
 )
-from unstructured.runtime import CartesianAxis, closure, offset
+from unstructured.runtime import CartesianAxis, Offset
 from unstructured.utils import tupelize
 import numpy as np
 
@@ -144,17 +145,27 @@ def domain_iterator(domain):
     )
 
 
-def execute_shift(pos, tag, index):
-    if isinstance(tag, CartesianAxis):
-        assert tag in pos
+def execute_shift(pos, tag, index, *, offset_provider):
+    if tag in pos:  # sparse field with offset as neighbor dimension
+        # TODO think of sparse field which is additionally shifted in the sparse direction with the same offset
         new_pos = pos.copy()
-        new_pos[tag] += index
+        assert new_pos[tag] is None
+        new_pos[tag] = index
         return new_pos
-    elif isinstance(tag, NeighborTableOffsetProvider):
-        assert tag.origin_axis in pos
+    assert tag.value in offset_provider
+    offset_implementation = offset_provider[tag.value]
+    if isinstance(offset_implementation, CartesianAxis):
+        assert offset_implementation in pos
         new_pos = pos.copy()
-        del new_pos[tag.origin_axis]
-        new_pos[tag.neighbor_axis] = tag.tbl[pos[tag.origin_axis]][index]
+        new_pos[offset_implementation] += index
+        return new_pos
+    elif isinstance(offset_implementation, NeighborTableOffsetProvider):
+        assert offset_implementation.origin_axis in pos
+        new_pos = pos.copy()
+        del new_pos[offset_implementation.origin_axis]
+        new_pos[offset_implementation.neighbor_axis] = offset_implementation.tbl[
+            pos[offset_implementation.origin_axis]
+        ][index]
         return new_pos
 
     assert False
@@ -184,13 +195,13 @@ def group_offsets(*offsets):
     return complete_offsets, tag_stack
 
 
-def shift_position(pos, *offsets):
+def shift_position(pos, *offsets, offset_provider):
     complete_offsets, open_offsets = group_offsets(*offsets)
     assert not open_offsets
 
     new_pos = pos
     for tag, index in complete_offsets:
-        new_pos = execute_shift(new_pos, tag, index)
+        new_pos = execute_shift(new_pos, tag, index, offset_provider=offset_provider)
         if new_pos is None:
             return None
     return new_pos
@@ -201,25 +212,40 @@ def get_open_offsets(*offsets):
 
 
 class MDIterator:
-    def __init__(self, field, pos, *, offsets=[]) -> None:
+    def __init__(self, field, pos, *, offsets=[], offset_provider) -> None:
         self.field = field
         self.pos = pos
         self.offsets = offsets
+        self.offset_provider = offset_provider
 
     def shift(self, *offsets):
-        return MDIterator(self.field, self.pos, offsets=[*self.offsets, *offsets])
+        return MDIterator(
+            self.field,
+            self.pos,
+            offsets=[*self.offsets, *offsets],
+            offset_provider=self.offset_provider,
+        )
 
     def max_neighbors(self):
         open_offsets = get_open_offsets(*self.offsets)
         assert open_offsets
-        assert isinstance(open_offsets[0], NeighborTableOffsetProvider)
-        return open_offsets[0].max_neighbors
+        assert isinstance(
+            self.offset_provider[open_offsets[0].value], NeighborTableOffsetProvider
+        )
+        return self.offset_provider[open_offsets[0].value].max_neighbors
 
     def is_none(self):
-        return shift_position(self.pos, *self.offsets) is None
+        return (
+            shift_position(
+                self.pos, *self.offsets, offset_provider=self.offset_provider
+            )
+            is None
+        )
 
     def deref(self):
-        shifted_pos = shift_position(self.pos, *self.offsets)
+        shifted_pos = shift_position(
+            self.pos, *self.offsets, offset_provider=self.offset_provider
+        )
 
         if not all(
             axis in [*shifted_pos.keys()]
@@ -233,31 +259,14 @@ class MDIterator:
         return self.field[ordered_indices]
 
 
-def make_in_iterator(inp, pos):
-    return MDIterator(inp, pos)
-    # neighbor_axis = _get_neighbor_axis(inp.axises)
-    # if neighbor_axis is None:
-    #     return MDIterator(inp, pos)
-    # else:
-    #     new_pos = pos.copy()
-    #     new_pos[neighbor_axis] = 0
-    #     return MDIterator(inp, new_pos)
-
-
-@closure.register(EMBEDDED)
-def closure(domain, sten, outs, ins):  # domain is Dict[axis, range]
-    for pos in domain_iterator(domain):
-        # ins_iters = list(MDIterator(inp, pos) for inp in ins)
-        ins_iters = list(make_in_iterator(inp, pos) for inp in ins)
-        res = sten(*ins_iters)
-        if not isinstance(res, tuple):
-            res = (res,)
-        if not len(res) == len(outs):
-            IndexError("Number of return values doesn't match number of output fields.")
-
-        for r, out in zip(res, outs):
-            ordered_indices = tuple(get_ordered_indices(out.axises, pos))
-            out[ordered_indices] = r
+def make_in_iterator(inp, pos, offset_provider):
+    sparse_dimensions = [axis for axis in inp.axises if isinstance(axis, Offset)]
+    new_pos = pos.copy()
+    for axis in sparse_dimensions:
+        new_pos[axis] = None
+    return MDIterator(
+        inp, new_pos, offsets=[*sparse_dimensions], offset_provider=offset_provider
+    )
 
 
 builtin_dispatch.push_key(EMBEDDED)  # makes embedded the default
@@ -334,22 +343,34 @@ def index_field(axis):
     return LocatedField(lambda index: index[0], (axis,))
 
 
+@unstructured.builtins.shift.register(EMBEDDED)
+def shift(*offsets):
+    def impl(iter):
+        return iter.shift(*offsets)
+
+    return impl
+
+
 def fendef_embedded(fun, *args, **kwargs):
     assert "offset_provider" in kwargs
 
-    @unstructured.builtins.shift.register(EMBEDDED)
-    def shift(*offsets):
-        def impl(iter):
-            return iter.shift(
-                *[
-                    offset
-                    if isinstance(offset, int)
-                    else kwargs["offset_provider"][offset.value]
-                    for offset in offsets
-                ]
+    @unstructured.runtime.closure.register(EMBEDDED)
+    def closure(domain, sten, outs, ins):  # domain is Dict[axis, range]
+        for pos in domain_iterator(domain):
+            ins_iters = list(
+                make_in_iterator(inp, pos, kwargs["offset_provider"]) for inp in ins
             )
+            res = sten(*ins_iters)
+            if not isinstance(res, tuple):
+                res = (res,)
+            if not len(res) == len(outs):
+                IndexError(
+                    "Number of return values doesn't match number of output fields."
+                )
 
-        return impl
+            for r, out in zip(res, outs):
+                ordered_indices = tuple(get_ordered_indices(out.axises, pos))
+                out[ordered_indices] = r
 
     fun(*args)
 

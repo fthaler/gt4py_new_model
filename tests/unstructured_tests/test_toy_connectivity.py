@@ -1,6 +1,5 @@
 import numpy as np
 from numpy.core.numeric import allclose
-import pytest
 from unstructured.runtime import *
 from unstructured.builtins import *
 from unstructured.embedded import (
@@ -117,4 +116,30 @@ def test_sum_edges_to_vertices_reduce():
     e2v_sum_fencil_reduce(None, None, backend="cpptoy")
     e2v_sum_fencil_reduce(inp, out)
     # e2v_sum_fencil_reduce(inp, out, backend="double_roundtrip")
+    assert allclose(out, ref)
+
+
+@fundef
+def sparse_stencil(inp):
+    return reduce(lambda a, b: a + b, 0)(inp)
+
+
+@fendef(offset_provider={"V2E": NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4)})
+def sparse_fencil(inp, out):
+    closure(
+        domain(named_range(Vertex, 0, 9)),
+        sparse_stencil,
+        [out],
+        [inp],
+    )
+
+
+def test_sparse_input_field():
+    inp = np_as_located_field(Vertex, V2E)(np.asarray([[1, 2, 3, 4]] * 9))
+    out = np_as_located_field(Vertex)(np.zeros([9]))
+
+    ref = np.ones([9]) * 10
+
+    sparse_fencil(inp, out, backend="double_roundtrip")
+
     assert allclose(out, ref)

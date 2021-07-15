@@ -10,6 +10,9 @@ __all__ = ["offset", "fundef", "fendef", "closure", "CartesianAxis"]
 class Offset:
     value: Union[int, str] = None
 
+    def __hash__(self) -> int:
+        return hash(self.value)
+
 
 def offset(value):
     return Offset(value)
