@@ -4,8 +4,8 @@ __all__ = [
     "deref",
     "shift",
     "lift",
-    "cartesian",
-    "cartesian_range",
+    "domain",
+    "named_range",
     "compose",
     "if_",
     "minus",
@@ -38,12 +38,12 @@ def lift(*args):
 
 
 @builtin_dispatch
-def cartesian(*args):
+def domain(*args):
     raise BackendNotSelectedError()
 
 
 @builtin_dispatch
-def cartesian_range(*args):
+def named_range(*args):
     raise BackendNotSelectedError()
 
 

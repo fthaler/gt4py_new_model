@@ -114,14 +114,14 @@ def compose(*args):
     return _f("compose", *args)
 
 
-@unstructured.builtins.cartesian.register("tracing")
-def cartesian(*args):
-    return _f("cartesian", *args)
+@unstructured.builtins.domain.register("tracing")
+def domain(*args):
+    return _f("domain", *args)
 
 
-@unstructured.builtins.cartesian_range.register("tracing")
-def cartesian_range(*args):
-    return _f("cartesian_range", *args)
+@unstructured.builtins.named_range.register("tracing")
+def named_range(*args):
+    return _f("named_range", *args)
 
 
 @unstructured.builtins.if_.register("tracing")

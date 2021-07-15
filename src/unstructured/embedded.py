@@ -1,13 +1,12 @@
 import itertools
-from typing_extensions import runtime
 import unstructured
 from unstructured.builtins import (
     builtin_dispatch,
     lift,
     shift,
     deref,
-    cartesian,
-    cartesian_range,
+    domain,
+    named_range,
     if_,
     minus,
     plus,
@@ -19,6 +18,13 @@ from unstructured.utils import tupelize
 import numpy as np
 
 EMBEDDED = "embedded"
+
+
+class NeighborTableOffsetProvider:
+    def __init__(self, tbl, origin_axis, neighbor_axis) -> None:
+        self.tbl = tbl
+        self.origin_axis = origin_axis
+        self.neighbor_axis = neighbor_axis
 
 
 @deref.register(EMBEDDED)
@@ -63,16 +69,16 @@ def lift(stencil):
     return impl
 
 
-@cartesian.register(EMBEDDED)
-def cartesian(*args):
+@domain.register(EMBEDDED)
+def domain(*args):
     domain = {}
     for arg in args:
         domain.update(arg)
     return domain
 
 
-@cartesian_range.register(EMBEDDED)
-def cartesian_range(tag, start, end):
+@named_range.register(EMBEDDED)
+def named_range(tag, start, end):
     return {tag: range(start, end)}
 
 
@@ -115,6 +121,13 @@ def execute_shift(pos, tag, index):
         new_pos = pos.copy()
         new_pos[tag] += index
         return new_pos
+    elif isinstance(tag, NeighborTableOffsetProvider):
+        assert tag.origin_axis in pos
+        new_pos = pos.copy()
+        del new_pos[tag.origin_axis]
+        new_pos[tag.neighbor_axis] = tag.tbl[pos[tag.origin_axis]][index]
+        return new_pos
+
     assert False
 
 
@@ -281,6 +294,10 @@ def np_as_located_field(*axises, origin=None):
         return LocatedField(getter, axises, setter=setter, array=a.__array__)
 
     return _maker
+
+
+def index_field(axis):
+    return LocatedField(lambda index: index[0], (axis,))
 
 
 def fendef_embedded(fun, *args, **kwargs):

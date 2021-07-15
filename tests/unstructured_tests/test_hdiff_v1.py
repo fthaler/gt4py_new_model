@@ -54,7 +54,7 @@ def hdiff_sten(inp, coeff):
 @fendef(offset_provider={"I": IDim, "J": JDim})
 def hdiff(inp, coeff, out, x, y):
     closure(
-        cartesian(cartesian_range(IDim, 0, x), cartesian_range(JDim, 0, y)),
+        domain(named_range(IDim, 0, x), named_range(JDim, 0, y)),
         hdiff_sten,
         [out],
         [inp, coeff],

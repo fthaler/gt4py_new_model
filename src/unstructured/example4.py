@@ -16,7 +16,7 @@ def indirect(inp):
 
 @fendef
 def testee(xs, xe, ys, ye, z, output, input):
-    closure(cartesian(xs, xe, ys, ye, 0, z), indirect, [output], [input])
+    closure(domain(xs, xe, ys, ye, 0, z), indirect, [output], [input])
 
 
 testee(*([None] * 7), backend="lisp")

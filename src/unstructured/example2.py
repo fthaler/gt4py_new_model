@@ -15,10 +15,10 @@ K = CartesianAxis("K")
 @fendef
 def testee(xs, xe, ys, ye, z, output, input):
     closure(
-        cartesian(
-            cartesian_range(I, xs, xe),
-            cartesian_range(J, ys, ye),
-            cartesian_range(K, 0, z),
+        domain(
+            named_range(I, xs, xe),
+            named_range(J, ys, ye),
+            named_range(K, 0, z),
         ),
         lap,
         [output],

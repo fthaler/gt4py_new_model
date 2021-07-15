@@ -18,7 +18,7 @@ def foo(inp):
 @fendef(offset_provider={"I": I_loc, "J": J_loc})
 def testee(output, input):
     closure(
-        cartesian(cartesian_range(I_loc, 0, 1), cartesian_range(J_loc, 0, 1)),
+        domain(named_range(I_loc, 0, 1), named_range(J_loc, 0, 1)),
         foo,
         [output],
         [input],
@@ -31,7 +31,7 @@ testee(None, None, backend="cpptoy")
 @fendef(offset_provider={"I": J_loc, "J": I_loc})
 def testee_swapped(output, input):
     closure(
-        cartesian(cartesian_range(I_loc, 0, 1), cartesian_range(J_loc, 0, 1)),
+        domain(named_range(I_loc, 0, 1), named_range(J_loc, 0, 1)),
         foo,
         [output],
         [input],
@@ -65,7 +65,7 @@ def foo2(inp):
 @fendef(offset_provider={"I": J_loc, "J": I_loc})
 def testee2(output, input):
     closure(
-        cartesian(cartesian_range(I_loc, 0, 1), cartesian_range(J_loc, 0, 1)),
+        domain(named_range(I_loc, 0, 1), named_range(J_loc, 0, 1)),
         foo2,
         [output],
         [input],

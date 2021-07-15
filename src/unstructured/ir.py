@@ -85,8 +85,8 @@ class Program(Node, SymbolTableTrait):
     builtin_functions = list(
         Sym(id=name)
         for name in [
-            "cartesian",
-            "cartesian_range",
+            "domain",
+            "named_range",
             "compose",
             "lift",
             "deref",
