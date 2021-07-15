@@ -109,6 +109,11 @@ def lift(sten):
     return _f("lift", sten)
 
 
+@unstructured.builtins.reduce.register("tracing")
+def reduce(*args):
+    return _f("reduce", *args)
+
+
 @unstructured.builtins.compose.register("tracing")
 def compose(*args):
     return _f("compose", *args)

@@ -4,6 +4,7 @@ __all__ = [
     "deref",
     "shift",
     "lift",
+    "reduce",
     "domain",
     "named_range",
     "compose",
@@ -34,6 +35,11 @@ def shift(*args):
 
 @builtin_dispatch
 def lift(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def reduce(*args):
     raise BackendNotSelectedError()
 
 

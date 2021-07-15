@@ -89,6 +89,7 @@ class Program(Node, SymbolTableTrait):
             "named_range",
             "compose",
             "lift",
+            "reduce",
             "deref",
             "shift",
             "scan",

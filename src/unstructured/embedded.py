@@ -3,6 +3,7 @@ import unstructured
 from unstructured.builtins import (
     builtin_dispatch,
     lift,
+    reduce,
     shift,
     deref,
     domain,
@@ -21,10 +22,11 @@ EMBEDDED = "embedded"
 
 
 class NeighborTableOffsetProvider:
-    def __init__(self, tbl, origin_axis, neighbor_axis) -> None:
+    def __init__(self, tbl, origin_axis, neighbor_axis, max_neighbors) -> None:
         self.tbl = tbl
         self.origin_axis = origin_axis
         self.neighbor_axis = neighbor_axis
+        self.max_neighbors = max_neighbors
 
 
 @deref.register(EMBEDDED)
@@ -67,6 +69,33 @@ def lift(stencil):
         return wrap_iterator()
 
     return impl
+
+
+@reduce.register(EMBEDDED)
+def reduce(fun, init):
+    def sten(*iters):
+        # assert check_that_all_iterators_are_compatible(*iters)
+        first_it = iters[0]
+        n = first_it.max_neighbors()
+        res = init
+        for i in range(n):
+            # we can check a single argument
+            # because all arguments share the same pattern
+            if (
+                unstructured.builtins.deref(unstructured.builtins.shift(i)(first_it))
+                is None
+            ):
+                break
+            res = fun(
+                res,
+                *(
+                    unstructured.builtins.deref(unstructured.builtins.shift(i)(it))
+                    for it in iters
+                )
+            )
+        return res
+
+    return sten
 
 
 @domain.register(EMBEDDED)
@@ -142,20 +171,33 @@ def execute_shift(pos, tag, index):
 # = shift(v2c,e2c,2,0)(cell_field) <-- v2c,e2c twice incomplete shift
 # = shift(2,0)(shift(v2c,e2c)(cell_field))
 # for implementations it means everytime we have an index, we can "execute" a concrete shift
-def shift_position(pos, *offsets):
-    new_pos = pos
+def group_offsets(*offsets):
     tag_stack = []
+    complete_offsets = []
     for offset in offsets:
         if isinstance(offset, int):
             assert tag_stack
             tag = tag_stack.pop(0)  # first tag corresponds to current index
-            new_pos = execute_shift(new_pos, tag, offset)
-            if new_pos is None:
-                return None
+            complete_offsets.append((tag, offset))
         else:
             tag_stack.append(offset)
-    assert not tag_stack
+    return complete_offsets, tag_stack
+
+
+def shift_position(pos, *offsets):
+    complete_offsets, open_offsets = group_offsets(*offsets)
+    assert not open_offsets
+
+    new_pos = pos
+    for tag, index in complete_offsets:
+        new_pos = execute_shift(new_pos, tag, index)
+        if new_pos is None:
+            return None
     return new_pos
+
+
+def get_open_offsets(*offsets):
+    return group_offsets(*offsets)[1]
 
 
 class MDIterator:
@@ -167,25 +209,17 @@ class MDIterator:
     def shift(self, *offsets):
         return MDIterator(self.field, self.pos, offsets=[*self.offsets, *offsets])
 
-    # def get_max_number_of_neighbors(self):
-    #     return len(self.get_shifted_pos()[NeighborAxis][-1].offsets)
-
-    def get_shifted_pos(self):
-        return shift_position(self.pos, *self.offsets)
-        # shifted_pos = self.pos
-        # if shifted_pos is None:
-        #     return None
-        # for offset in self.offsets:
-        #     shifted_pos = _shift_impl(shifted_pos, offset)
-        #     if shifted_pos is None:
-        #         return None
-        # return shifted_pos
+    def max_neighbors(self):
+        open_offsets = get_open_offsets(*self.offsets)
+        assert open_offsets
+        assert isinstance(open_offsets[0], NeighborTableOffsetProvider)
+        return open_offsets[0].max_neighbors
 
     def is_none(self):
-        return self.get_shifted_pos() is None
+        return shift_position(self.pos, *self.offsets) is None
 
     def deref(self):
-        shifted_pos = self.get_shifted_pos()
+        shifted_pos = shift_position(self.pos, *self.offsets)
 
         if not all(
             axis in [*shifted_pos.keys()]

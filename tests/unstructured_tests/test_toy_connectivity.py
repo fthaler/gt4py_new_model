@@ -74,8 +74,8 @@ def sum_edges_to_vertices(in_edges):
     )
 
 
-@fendef(offset_provider={"V2E": NeighborTableOffsetProvider(v2e_arr, Vertex, Edge)})
-def foo(in_edges, out_vertices):
+@fendef(offset_provider={"V2E": NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4)})
+def e2v_sum_fencil(in_edges, out_vertices):
     closure(
         domain(named_range(Vertex, 0, 9)),
         sum_edges_to_vertices,
@@ -89,5 +89,32 @@ def test_sum_edges_to_vertices():
     out = np_as_located_field(Vertex)(np.zeros([9]))
     ref = np.asarray(list(sum(row) for row in v2e_arr))
 
-    foo(inp, out, backend="double_roundtrip")
+    e2v_sum_fencil(inp, out, backend="double_roundtrip")
+    assert allclose(out, ref)
+    e2v_sum_fencil(None, None, backend="cpptoy")
+
+
+@fundef
+def sum_edges_to_vertices_reduce(in_edges):
+    return reduce(lambda a, b: a + b, 0)(shift(V2E)(in_edges))
+
+
+@fendef(offset_provider={"V2E": NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4)})
+def e2v_sum_fencil_reduce(in_edges, out_vertices):
+    closure(
+        domain(named_range(Vertex, 0, 9)),
+        sum_edges_to_vertices_reduce,
+        [out_vertices],
+        [in_edges],
+    )
+
+
+def test_sum_edges_to_vertices_reduce():
+    inp = index_field(Edge)
+    out = np_as_located_field(Vertex)(np.zeros([9]))
+    ref = np.asarray(list(sum(row) for row in v2e_arr))
+
+    e2v_sum_fencil_reduce(None, None, backend="cpptoy")
+    e2v_sum_fencil_reduce(inp, out)
+    # e2v_sum_fencil_reduce(inp, out, backend="double_roundtrip")
     assert allclose(out, ref)
