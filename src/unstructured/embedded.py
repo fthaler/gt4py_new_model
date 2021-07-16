@@ -168,8 +168,8 @@ def execute_shift(pos, tag, index, *, offset_provider):
         new_pos = pos.copy()
         del new_pos[offset_implementation.origin_axis]
         new_pos[offset_implementation.neighbor_axis] = offset_implementation.tbl[
-            pos[offset_implementation.origin_axis]
-        ][index]
+            pos[offset_implementation.origin_axis], index
+        ]
         return new_pos
 
     assert False
