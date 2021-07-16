@@ -204,7 +204,7 @@ def shift_position(pos, *offsets, offset_provider):
     assert not open_offsets
 
     new_pos = pos
-    for tag, index in complete_offsets:
+    for tag, index in reversed(complete_offsets):
         new_pos = execute_shift(new_pos, tag, index, offset_provider=offset_provider)
         if new_pos is None:
             return None

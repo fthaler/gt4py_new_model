@@ -1,3 +1,4 @@
+from dataclasses import field
 import numpy as np
 from numpy.core.numeric import allclose
 from unstructured.runtime import *
@@ -76,6 +77,7 @@ v2e_arr = np.array(
 )
 
 V2E = offset("V2E")
+E2V = offset("E2V")
 
 
 @fundef
@@ -241,13 +243,60 @@ def test_shift_sparse_input_field():
     sparse_shifted_fencil(
         inp,
         out,
-        # backend="double_roundtrip",
+        backend="double_roundtrip",
         offset_provider={
             "V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4)
         },
     )
 
     assert allclose(out, ref)
+
+
+@fundef
+def shift_shift_stencil2(inp):
+    return deref(shift(V2E, 3)(shift(E2V, 1)(inp)))
+
+
+@fundef
+def shift_sparse_stencil2(inp):
+    return deref(shift(1, 3)(shift(V2E)(inp)))
+
+
+@fendef
+def sparse_shifted_fencil2(inp_sparse, inp, out1, out2):
+    closure(
+        domain(named_range(Vertex, 0, 9)),
+        shift_shift_stencil2,
+        [out1],
+        [inp],
+    )
+    closure(
+        domain(named_range(Vertex, 0, 9)),
+        shift_sparse_stencil2,
+        [out2],
+        [inp_sparse],
+    )
+
+
+def test_shift_sparse_input_field2():
+    inp = index_field(Vertex)
+    inp_sparse = np_as_located_field(Edge, E2V)(e2v_arr)
+    out1 = np_as_located_field(Vertex)(np.zeros([9]))
+    out2 = np_as_located_field(Vertex)(np.zeros([9]))
+
+    sparse_shifted_fencil2(
+        inp_sparse,
+        inp,
+        out1,
+        out2,
+        backend="double_roundtrip",
+        offset_provider={
+            "E2V": NeighborTableOffsetProvider(e2v_arr, Edge, Vertex, 2),
+            "V2E": NeighborTableOffsetProvider(v2e_arr, Vertex, Edge, 4),
+        },
+    )
+
+    assert allclose(out1, out2)
 
 
 # @fundef
