@@ -12,6 +12,7 @@ __all__ = [
     "minus",
     "plus",
     "mul",
+    "div",
     "greater",
 ]
 
@@ -75,6 +76,11 @@ def plus(*args):
 
 @builtin_dispatch
 def mul(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def div(*args):
     raise BackendNotSelectedError()
 
 

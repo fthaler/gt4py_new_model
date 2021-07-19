@@ -96,6 +96,7 @@ class Program(Node, SymbolTableTrait):
             "plus",
             "minus",
             "mul",
+            "div",
             "greater",
             "less",
             "if_",

@@ -36,8 +36,8 @@ def sum_reduce(it):
 
 @fundef
 def compute_zavgS(pp, S_M):
-    # zavg = 0.5 * (deref(shift(E2V, 0)(pp)) + deref(shift(E2V, 1)(pp)))
-    zavg = 0.5 * sum_reduce(shift(E2V)(pp))
+    zavg = 0.5 * (deref(shift(E2V, 0)(pp)) + deref(shift(E2V, 1)(pp)))
+    # zavg = 0.5 * sum_reduce(shift(E2V)(pp))
     return deref(S_M) * zavg
 
 
@@ -58,9 +58,8 @@ def compute_zavgS_fencil(
 
 @fundef
 def compute_pnabla(pp, S_M, sign, vol):
-    zavgS = shift(V2E)(lift(compute_zavgS)(pp, S_M))
+    zavgS = lift(compute_zavgS)(pp, S_M)
     pnabla_M = reduce(lambda a, b, c: a + b * c, 0)(shift(V2E)(zavgS), sign)
-
     return pnabla_M / deref(vol)
 
 
@@ -68,21 +67,26 @@ def compute_pnabla(pp, S_M, sign, vol):
 def nabla(
     n_nodes,
     out_MXX,
+    out_MYY,
     pp,
     S_MXX,
-    # S_MYY,
+    S_MYY,
     sign,
     vol,
 ):
+    # TODO replace by single stencil
     closure(
         domain(named_range(Vertex, 0, n_nodes)),
         compute_pnabla,
         [out_MXX],
         [pp, S_MXX, sign, vol],
     )
-    # , compute_pnabla(
-    #     e2v, v2e, pp, S_MYY, sign, vol
-    # )
+    closure(
+        domain(named_range(Vertex, 0, n_nodes)),
+        compute_pnabla,
+        [out_MYY],
+        [pp, S_MYY, sign, vol],
+    )
 
 
 def test_compute_zavgS():
@@ -119,44 +123,41 @@ def test_compute_zavgS():
     assert_close(1000788897.3202186, max(zavgS))
 
 
-# def test_nabla():
-#     setup = nabla_setup()
+def test_nabla():
+    setup = nabla_setup()
 
-#     sign = np_as_located_field(Vertex, V2E)(setup.sign_field)
-#     pp = np_as_located_field(Vertex)(setup.input_field)
-#     # S_MXX, S_MYY = tuple(map(array_as_field(Edge), setup.S_fields))
-#     S_MXX = np_as_located_field(Edge)(setup.S_fields[0])
-#     vol = np_as_located_field(Vertex)(setup.vol_field)
+    sign = np_as_located_field(Vertex, V2E)(setup.sign_field)
+    pp = np_as_located_field(Vertex)(setup.input_field)
+    S_MXX, S_MYY = tuple(map(np_as_located_field(Edge), setup.S_fields))
+    vol = np_as_located_field(Vertex)(setup.vol_field)
 
-#     pnabla_MXX = np_as_located_field(Vertex)(np.zeros((setup.nodes_size)))
-#     pnabla_MYY = np_as_located_field(Vertex)(np.zeros((setup.nodes_size)))
+    pnabla_MXX = np_as_located_field(Vertex)(np.zeros((setup.nodes_size)))
+    pnabla_MYY = np_as_located_field(Vertex)(np.zeros((setup.nodes_size)))
 
-#     print(f"nodes: {setup.nodes_size}")
-#     print(f"edges: {setup.edges_size}")
+    e2v = NeighborTableOffsetProvider(
+        AtlasTable(setup.edges2node_connectivity), Edge, Vertex, 2
+    )
+    v2e = NeighborTableOffsetProvider(
+        AtlasTable(setup.nodes2edge_connectivity), Vertex, Edge, 7
+    )
 
-#     e2v = NeighborTableOffsetProvider(
-#         AtlasTable(setup.edges2node_connectivity), Edge, Vertex, 2
-#     )
-#     v2e = NeighborTableOffsetProvider(
-#         AtlasTable(setup.nodes2edge_connectivity), Vertex, Edge, 7
-#     )
+    nabla(
+        setup.nodes_size,
+        pnabla_MXX,
+        pnabla_MYY,
+        pp,
+        S_MXX,
+        S_MYY,
+        sign,
+        vol,
+        backend="double_roundtrip",
+        offset_provider={"E2V": e2v, "V2E": v2e},
+    )
 
-#     nabla(
-#         setup.nodes_size,
-#         pnabla_MXX,
-#         pp,
-#         S_MXX,
-#         sign,
-#         vol,
-#         offset_provider={"E2V": e2v, "V2E": v2e},
-#     )
-#     # pnabla_MXX[:], pnabla_MYY[:] = nabla(e2v, v2e, pp, S_MXX, S_MYY, sign_acc, vol)
-#     # pnabla_MXX[:], pnabla_MYY[:] = nabla(e2v, v2e, pp, S_MXX, S_MYY, sign_acc, vol)
-
-#     assert_close(-3.5455427772566003e-003, min(pnabla_MXX))
-#     assert_close(3.5455427772565435e-003, max(pnabla_MXX))
-#     # assert_close(-3.3540113705465301e-003, min(pnabla_MYY))
-#     # assert_close(3.3540113705465301e-003, max(pnabla_MYY))
+    assert_close(-3.5455427772566003e-003, min(pnabla_MXX))
+    assert_close(3.5455427772565435e-003, max(pnabla_MXX))
+    assert_close(-3.3540113705465301e-003, min(pnabla_MYY))
+    assert_close(3.3540113705465301e-003, max(pnabla_MYY))
 
 
 # @stencil

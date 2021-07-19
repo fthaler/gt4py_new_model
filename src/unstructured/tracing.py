@@ -55,6 +55,10 @@ def _patch_Expr():
         return make_node(other) * self
 
     @monkeypatch_method(Expr)
+    def __truediv__(self, other):
+        return FunCall(fun=SymRef(id="div"), args=[self, make_node(other)])
+
+    @monkeypatch_method(Expr)
     def __sub__(self, other):
         return FunCall(fun=SymRef(id="minus"), args=[self, make_node(other)])
 
@@ -156,6 +160,11 @@ def minus(*args):
 @unstructured.builtins.mul.register("tracing")
 def mul(*args):
     return _f("mul", *args)
+
+
+@unstructured.builtins.div.register("tracing")
+def div(*args):
+    return _f("div", *args)
 
 
 @unstructured.builtins.greater.register("tracing")
