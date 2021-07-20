@@ -72,7 +72,7 @@ def nabla(
     sign,
     vol,
 ):
-    # TODO replace by single stencil
+    # TODO replace by single stencil which returns tuple
     closure(
         domain(named_range(Vertex, 0, n_nodes)),
         compute_pnabla,
