@@ -16,6 +16,7 @@ from unstructured.concepts import NeighborTableOffset
 from unstructured.embedded import NeighborTableOffsetProvider, np_as_located_field
 from unstructured.runtime import *
 from unstructured.builtins import *
+from unstructured import library
 from .fvm_nabla_setup import (
     assert_close,
     nabla_setup,
@@ -30,14 +31,10 @@ V2E = offset("V2E")
 E2V = offset("E2V")
 
 
-def sum_reduce(it):
-    return reduce(lambda a, b: a + b, 0)(it)
-
-
 @fundef
 def compute_zavgS(pp, S_M):
-    zavg = 0.5 * (deref(shift(E2V, 0)(pp)) + deref(shift(E2V, 1)(pp)))
-    # zavg = 0.5 * sum_reduce(shift(E2V)(pp))
+    # zavg = 0.5 * (deref(shift(E2V, 0)(pp)) + deref(shift(E2V, 1)(pp)))
+    zavg = 0.5 * library.sum()(shift(E2V)(pp))
     return deref(S_M) * zavg
 
 
@@ -59,7 +56,8 @@ def compute_zavgS_fencil(
 @fundef
 def compute_pnabla(pp, S_M, sign, vol):
     zavgS = lift(compute_zavgS)(pp, S_M)
-    pnabla_M = reduce(lambda a, b, c: a + b * c, 0)(shift(V2E)(zavgS), sign)
+    # pnabla_M = reduce(lambda a, b, c: a + b * c, 0)(shift(V2E)(zavgS), sign)
+    pnabla_M = library.sum(lambda a, b: a * b)(shift(V2E)(zavgS), sign)
     return pnabla_M / deref(vol)
 
 
