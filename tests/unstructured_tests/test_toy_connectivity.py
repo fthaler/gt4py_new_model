@@ -131,8 +131,7 @@ def test_sum_edges_to_vertices_reduce():
     ref = np.asarray(list(sum(row) for row in v2e_arr))
 
     e2v_sum_fencil_reduce(None, None, backend="cpptoy")
-    e2v_sum_fencil_reduce(inp, out)
-    # e2v_sum_fencil_reduce(inp, out, backend="double_roundtrip")
+    e2v_sum_fencil_reduce(inp, out, backend="double_roundtrip")
     assert allclose(out, ref)
 
 
@@ -299,37 +298,45 @@ def test_shift_sparse_input_field2():
     assert allclose(out1, out2)
 
 
-# @fundef
-# def sparse_shifted_stencil_reduce(inp):
-#     def sum_(a, b):
-#         return a + b
+@fundef
+def sparse_shifted_stencil_reduce(inp):
+    def sum_(a, b):
+        return a + b
 
-#     return reduce(sum_, 0)(shift(V2V)(lift(reduce(sum_, 0))(inp)))
-
-
-# @fendef
-# def sparse_shifted_fencil_reduce(inp, out):
-#     closure(
-#         domain(named_range(Vertex, 0, 9)),
-#         sparse_shifted_stencil_reduce,
-#         [out],
-#         [inp],
-#     )
+    # return deref(shift(V2V, 0)(lift(deref)(shift(0)(inp))))
+    return reduce(sum_, 0)(shift(V2V)(lift(reduce(sum_, 0))(inp)))
 
 
-# def test_shift_sparse_input_field():
-#     inp = np_as_located_field(Vertex, V2V)(v2v_arr)
-#     out = np_as_located_field(Vertex)(np.zeros([9]))
+@fendef
+def sparse_shifted_fencil_reduce(inp, out):
+    closure(
+        domain(named_range(Vertex, 0, 9)),
+        sparse_shifted_stencil_reduce,
+        [out],
+        [inp],
+    )
 
-#     ref = np.asarray(list(sum(row) for row in v2v_arr))
 
-#     sparse_shifted_fencil_reduce(
-#         inp,
-#         out,
-#         backend="double_roundtrip",
-#         offset_provider={
-#             "V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4)
-#         },
-#     )
+def test_shift_sparse_input_field():
+    inp = np_as_located_field(Vertex, V2V)(v2v_arr)
+    out = np_as_located_field(Vertex)(np.zeros([9]))
 
-#     assert allclose(out, ref)
+    ref = []
+    for row in v2v_arr:
+        elem_sum = 0
+        for neigh in row:
+            elem_sum += sum(v2v_arr[neigh])
+        ref.append(elem_sum)
+
+    ref = np.asarray(ref)
+
+    sparse_shifted_fencil_reduce(
+        inp,
+        out,
+        backend="double_roundtrip",
+        offset_provider={
+            "V2V": NeighborTableOffsetProvider(v2v_arr, Vertex, Vertex, 4)
+        },
+    )
+
+    assert allclose(np.asarray(out), ref)
