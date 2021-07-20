@@ -32,11 +32,6 @@ def flux(d):
 
 
 @fundef
-def flux_I(inp):
-    return flux(I)(inp)
-
-
-@fundef
 def hdiff_sten(inp, coeff):
     flx = lift(flux(I))(inp)
     fly = lift(flux(J))(inp)
