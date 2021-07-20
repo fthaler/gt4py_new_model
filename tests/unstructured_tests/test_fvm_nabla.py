@@ -12,7 +12,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from unstructured.atlas_utils import AtlasTable
-from unstructured.concepts import NeighborTableOffset
 from unstructured.embedded import NeighborTableOffsetProvider, np_as_located_field
 from unstructured.runtime import *
 from unstructured.builtins import *
