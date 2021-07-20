@@ -346,6 +346,12 @@ class LocatedField:
             raise TypeError("__array__ not supported for this field")
         return self.array()
 
+    @property
+    def shape(self):
+        if self.array is None:
+            raise TypeError("`shape` not supported for this field")
+        return self.array().shape
+
 
 def get_ordered_indices(axises, pos):
     """pos is a dictionary from axis to offset"""

@@ -8,3 +8,10 @@ def sum(fun=None):
         return reduce(
             lambda first, a, b: first + fun(a, b), 0
         )  # TODO tracing for *args
+
+
+def dot(a, b):
+    return reduce(lambda acc, a_n, c_n: acc + a_n * c_n, 0)(a, b)
+
+
+# dot = reduce(lambda a, b, c: a + b * c, 0)

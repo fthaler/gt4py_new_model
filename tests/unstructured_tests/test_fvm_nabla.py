@@ -32,8 +32,9 @@ E2V = offset("E2V")
 
 @fundef
 def compute_zavgS(pp, S_M):
-    # zavg = 0.5 * (deref(shift(E2V, 0)(pp)) + deref(shift(E2V, 1)(pp)))
-    zavg = 0.5 * library.sum()(shift(E2V)(pp))
+    zavg = 0.5 * (deref(shift(E2V, 0)(pp)) + deref(shift(E2V, 1)(pp)))
+    # zavg = 0.5 * reduce(lambda a, b: a + b, 0)(shift(E2V)(pp))
+    # zavg = 0.5 * library.sum()(shift(E2V)(pp))
     return deref(S_M) * zavg
 
 
@@ -56,7 +57,8 @@ def compute_zavgS_fencil(
 def compute_pnabla(pp, S_M, sign, vol):
     zavgS = lift(compute_zavgS)(pp, S_M)
     # pnabla_M = reduce(lambda a, b, c: a + b * c, 0)(shift(V2E)(zavgS), sign)
-    pnabla_M = library.sum(lambda a, b: a * b)(shift(V2E)(zavgS), sign)
+    # pnabla_M = library.sum(lambda a, b: a * b)(shift(V2E)(zavgS), sign)
+    pnabla_M = library.dot(shift(V2E)(zavgS), sign)
     return pnabla_M / deref(vol)
 
 
