@@ -5,6 +5,8 @@ __all__ = [
     "shift",
     "lift",
     "reduce",
+    "scan",
+    "is_none",
     "domain",
     "named_range",
     "compose",
@@ -41,6 +43,16 @@ def lift(*args):
 
 @builtin_dispatch
 def reduce(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def scan(*args):
+    raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def is_none(*args):
     raise BackendNotSelectedError()
 
 

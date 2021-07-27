@@ -1,12 +1,15 @@
+from dataclasses import dataclass
 import itertools
 
 import unstructured
 from unstructured.builtins import (
     builtin_dispatch,
+    is_none,
     lift,
     reduce,
     shift,
     deref,
+    scan,
     domain,
     named_range,
     if_,
@@ -19,6 +22,7 @@ from unstructured.builtins import (
 from unstructured.runtime import CartesianAxis, Offset
 from unstructured.utils import tupelize
 import numpy as np
+import numbers
 
 EMBEDDED = "embedded"
 
@@ -45,8 +49,20 @@ def if_(cond, t, f):
 def lift(stencil):
     def impl(*args):
         class wrap_iterator:
-            def __init__(self, *, offsets=[]) -> None:
+            def __init__(self, *, offsets=[], elem=None) -> None:
                 self.offsets = offsets
+                self.elem = elem
+                self.elem_pos = 0
+
+            def unpack(self, num):
+                if self.elem is None:
+                    for _ in range(num):
+                        self.elem_pos = self.elem_pos + 1
+                        yield wrap_iterator(
+                            offsets=self.offsets, elem=self.elem_pos - 1
+                        )
+                else:
+                    assert False
 
             def shift(self, *offsets):
                 return wrap_iterator(offsets=[*offsets, *self.offsets])
@@ -101,7 +117,12 @@ def lift(stencil):
 
                 if any(shifted_arg.is_none() for shifted_arg in shifted_args):
                     return None
-                return stencil(*shifted_args)
+
+                if self.elem is None:
+                    return stencil(*shifted_args)
+                else:
+                    print(len(stencil(*shifted_args)))
+                    return stencil(*shifted_args)[self.elem]
 
         return wrap_iterator()
 
@@ -133,6 +154,16 @@ def reduce(fun, init):
         return res
 
     return sten
+
+
+class _None:
+    def __add__(self, other):
+        ...
+
+
+@is_none.register(EMBEDDED)
+def is_none(arg):
+    return isinstance(arg, _None)
 
 
 @domain.register(EMBEDDED)
@@ -250,7 +281,7 @@ def shift_position(pos, *offsets, offset_provider):
     complete_offsets, open_offsets = group_offsets(*offsets)
     # assert not open_offsets # TODO enable this, check failing test and make everything saver
 
-    new_pos = pos
+    new_pos = pos.copy()
     for tag, index in complete_offsets:
         new_pos = execute_shift(new_pos, tag, index, offset_provider=offset_provider)
         if new_pos is None:
@@ -263,11 +294,14 @@ def get_open_offsets(*offsets):
 
 
 class MDIterator:
-    def __init__(self, field, pos, *, offsets=[], offset_provider) -> None:
+    def __init__(
+        self, field, pos, *, offsets=[], offset_provider, column_axis=None
+    ) -> None:
         self.field = field
         self.pos = pos
         self.offsets = offsets
         self.offset_provider = offset_provider
+        self.column_axis = column_axis
 
     def shift(self, *offsets):
         return MDIterator(
@@ -275,6 +309,7 @@ class MDIterator:
             self.pos,
             offsets=[*offsets, *self.offsets],
             offset_provider=self.offset_provider,
+            column_axis=self.column_axis,
         )
 
     def max_neighbors(self):
@@ -298,22 +333,37 @@ class MDIterator:
             self.pos, *self.offsets, offset_provider=self.offset_provider
         )
 
-        if not all(axis in [*shifted_pos.keys()] for axis in self.field.axises):
+        if not all(axis in shifted_pos.keys() for axis in self.field.axises):
             raise IndexError(
                 "Iterator position doesn't point to valid location for its field."
             )
-        ordered_indices = get_ordered_indices(self.field.axises, shifted_pos)
+        slice_column = {}
+        if self.column_axis is not None:
+            slice_column[self.column_axis] = slice(shifted_pos[self.column_axis], None)
+            del shifted_pos[self.column_axis]
+        ordered_indices = get_ordered_indices(
+            self.field.axises,
+            shifted_pos,
+            slice_axises=slice_column,
+        )
         return self.field[ordered_indices]
 
 
-def make_in_iterator(inp, pos, offset_provider):
+def make_in_iterator(inp, pos, offset_provider, *, column_axis):
     sparse_dimensions = [axis for axis in inp.axises if isinstance(axis, Offset)]
     assert len(sparse_dimensions) <= 1  # TODO multiple is not a current use case
     new_pos = pos.copy()
     for axis in sparse_dimensions:
         new_pos[axis] = None
+    if column_axis is not None:
+        # if we deal with column stencil the column position is just an offset by which the whole column needs to be shifted
+        new_pos[column_axis] = 0
     return MDIterator(
-        inp, new_pos, offsets=[*sparse_dimensions], offset_provider=offset_provider
+        inp,
+        new_pos,
+        offsets=[*sparse_dimensions],
+        offset_provider=offset_provider,
+        column_axis=column_axis,
     )
 
 
@@ -353,14 +403,35 @@ class LocatedField:
         return self.array().shape
 
 
-def get_ordered_indices(axises, pos):
+def get_ordered_indices(axises, pos, *, slice_axises={}):
     """pos is a dictionary from axis to offset"""
-    assert all(axis in pos for axis in axises)
-    return tuple(pos[axis] for axis in axises)
+    assert all(axis in [*pos.keys(), *slice_axises] for axis in axises)
+    return tuple(pos[axis] if axis in pos else slice_axises[axis] for axis in axises)
 
 
 def _tupsum(a, b):
-    return tuple(sum(i) for i in zip(a, b))
+    def combine_slice(s, t):
+        is_slice = False
+        if isinstance(s, slice):
+            is_slice = True
+            first = s.start
+            assert s.step is None
+            assert s.stop is None
+        else:
+            assert isinstance(s, numbers.Integral)
+            first = s
+        if isinstance(t, slice):
+            is_slice = True
+            second = t.start
+            assert t.step is None
+            assert t.stop is None
+        else:
+            assert isinstance(t, numbers.Integral)
+            second = t
+        start = first + second
+        return slice(start, None) if is_slice else start
+
+    return tuple(combine_slice(*i) for i in zip(a, b))
 
 
 def np_as_located_field(*axises, origin=None):
@@ -396,14 +467,72 @@ def shift(*offsets):
     return impl
 
 
+@dataclass
+class Column:
+    axis: CartesianAxis
+    range: range
+
+
+class ScanArgIterator:
+    def __init__(self, wrapped_iter, *, offsets=[]) -> None:
+        self.wrapped_iter = wrapped_iter
+        self.offsets = offsets
+
+    def deref(self):
+        return self.wrapped_iter.deref()[0]
+
+    def shift(self, *offsets):
+        return ScanArgIterator(self.wrapped_iter, offsets=[*offsets, *self.offsets])
+
+
 def fendef_embedded(fun, *args, **kwargs):
     assert "offset_provider" in kwargs
 
     @unstructured.runtime.closure.register(EMBEDDED)
     def closure(domain, sten, outs, ins):  # domain is Dict[axis, range]
+
+        column = None
+        if "column_axis" in kwargs:
+            _column_axis = kwargs["column_axis"]
+            column = Column(_column_axis, domain[_column_axis])
+            del domain[_column_axis]
+
+        @unstructured.builtins.scan.register(
+            EMBEDDED
+        )  # TODO this is a bit ugly, alternative: pass scan range via iterator
+        def scan(scan_pass, is_forward, init):
+            def impl(*iters):
+                if column is None:
+                    raise RuntimeError("Column axis is not defined, cannot scan.")
+
+                _range = column.range
+                if not is_forward:
+                    _range = reversed(_range)
+
+                _init = init
+                if _init is None:
+                    _init = _None()
+                state = _init
+                cols = []
+                for _ in _range:
+                    state = scan_pass(
+                        state, *map(ScanArgIterator, iters)
+                    )  # more generic scan returns state and result as 2 different things
+                    cols.append([*tupelize(state)])
+
+                cols = tuple(
+                    map(np.asarray, (map(list, zip(*cols))))
+                )  # transpose to get tuple of columns as np array
+                return cols
+
+            return impl
+
         for pos in domain_iterator(domain):
             ins_iters = list(
-                make_in_iterator(inp, pos, kwargs["offset_provider"]) for inp in ins
+                make_in_iterator(
+                    inp, pos, kwargs["offset_provider"], column_axis=column.axis
+                )
+                for inp in ins
             )
             res = sten(*ins_iters)
             if not isinstance(res, tuple):
@@ -414,8 +543,15 @@ def fendef_embedded(fun, *args, **kwargs):
                 )
 
             for r, out in zip(res, outs):
-                ordered_indices = tuple(get_ordered_indices(out.axises, pos))
-                out[ordered_indices] = r
+                if column is None:
+                    ordered_indices = get_ordered_indices(out.axises, pos)
+                    out[ordered_indices] = r
+                else:
+                    colpos = pos.copy()
+                    for k in column.range:
+                        colpos[column.axis] = k
+                        ordered_indices = get_ordered_indices(out.axises, colpos)
+                        out[ordered_indices] = r[k]
 
     fun(*args)
 

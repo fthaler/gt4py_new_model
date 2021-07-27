@@ -13,6 +13,10 @@ class Expr(Node):
     ...
 
 
+class BoolLiteral(Expr):
+    value: bool
+
+
 class IntLiteral(Expr):
     value: int
 
@@ -23,6 +27,10 @@ class FloatLiteral(Expr):
 
 class StringLiteral(Expr):
     value: str
+
+
+class NoneLiteral(Expr):
+    _none_literal: int = 0
 
 
 class OffsetLiteral(Expr):
@@ -89,6 +97,7 @@ class Program(Node, SymbolTableTrait):
             "named_range",
             "compose",
             "lift",
+            "is_none",
             "reduce",
             "deref",
             "shift",

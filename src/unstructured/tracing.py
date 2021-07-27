@@ -19,6 +19,8 @@ from unstructured.ir import (
     FunctionDefinition,
     IntLiteral,
     Lambda,
+    NoneLiteral,
+    BoolLiteral,
     OffsetLiteral,
     Program,
     StencilClosure,
@@ -118,6 +120,16 @@ def reduce(*args):
     return _f("reduce", *args)
 
 
+@unstructured.builtins.scan.register("tracing")
+def scan(*args):
+    return _f("scan", *args)
+
+
+@unstructured.builtins.is_none.register("tracing")
+def is_none(*args):
+    return _f("is_none", *args)
+
+
 @unstructured.builtins.compose.register("tracing")
 def compose(*args):
     return _f("compose", *args)
@@ -183,6 +195,8 @@ def make_node(o):
             return lambdadef(o)
     if isinstance(o, unstructured.runtime.Offset):
         return OffsetLiteral(value=o.value)
+    if isinstance(o, bool):
+        return BoolLiteral(value=o)
     if isinstance(o, int):
         return IntLiteral(value=o)
     if isinstance(o, float):
@@ -194,13 +208,13 @@ def make_node(o):
     if isinstance(o, list):
         return list(make_node(arg) for arg in o)
     if o is None:
-        return None
+        return NoneLiteral()
     raise NotImplementedError(f"Cannot handle {o}")
 
 
 def trace_function_call(fun):
     body = fun(*list(_s(param) for param in inspect.signature(fun).parameters.keys()))
-    return make_node(body)
+    return make_node(body) if body is not None else None
 
 
 def lambdadef(fun):

@@ -1,7 +1,7 @@
 from eve import codegen
 from eve.codegen import FormatTemplate as as_fmt, MakoTemplate as as_mako
 from eve.concepts import Node
-from unstructured.ir import AxisLiteral, OffsetLiteral
+from unstructured.ir import AxisLiteral, NoneLiteral, OffsetLiteral
 from unstructured.backends import backend
 import tempfile
 import importlib.util
@@ -11,8 +11,10 @@ import unstructured
 class EmbeddedDSL(codegen.TemplatedGenerator):
     Sym = as_fmt("{id}")
     SymRef = as_fmt("{id}")
+    BoolLiteral = as_fmt("{value}")
     IntLiteral = as_fmt("{value}")
     FloatLiteral = as_fmt("{value}")
+    NoneLiteral = as_fmt("None")
     OffsetLiteral = as_fmt("{value}")
     AxisLiteral = as_fmt("{value}")
     StringLiteral = as_fmt("{value}")
@@ -85,14 +87,19 @@ from unstructured.runtime import *
         fencil = getattr(foo, fencil_name)
         assert "offset_provider" in kwargs
 
+        new_kwargs = {}
+        new_kwargs["offset_provider"] = kwargs["offset_provider"]
+        if "column_axis" in kwargs:
+            new_kwargs["column_axis"] = kwargs["column_axis"]
+
         if not "dispatch_backend" in kwargs:
             unstructured.builtins.builtin_dispatch.push_key("embedded")
-            fencil(*args, offset_provider=kwargs["offset_provider"])
+            fencil(*args, **new_kwargs)
             unstructured.builtins.builtin_dispatch.pop_key()
         else:
             fencil(
                 *args,
-                offset_provider=kwargs["offset_provider"],
+                **new_kwargs,
                 backend=kwargs["dispatch_backend"],
             )
 
