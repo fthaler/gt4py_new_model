@@ -1,10 +1,14 @@
 from unstructured.ir import Program
 from unstructured.backends import backend
+from devtools import debug
 
 
 def execute_program(prog: Program, *args, **kwargs):
     assert "backend" in kwargs
     assert len(prog.fencil_definitions) == 1
+
+    if "debug" in kwargs and kwargs["debug"]:
+        debug(prog)
 
     if not len(args) == len(prog.fencil_definitions[0].params):
         raise RuntimeError("Incorrect number of arguments")
