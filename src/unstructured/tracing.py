@@ -130,6 +130,16 @@ def is_none(*args):
     return _f("is_none", *args)
 
 
+@unstructured.builtins.make_tuple.register("tracing")
+def make_tuple(*args):
+    return _f("make_tuple", *args)
+
+
+@unstructured.builtins.nth.register("tracing")
+def nth(*args):
+    return _f("nth", *args)
+
+
 @unstructured.builtins.compose.register("tracing")
 def compose(*args):
     return _f("compose", *args)

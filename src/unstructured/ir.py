@@ -98,6 +98,8 @@ class Program(Node, SymbolTableTrait):
             "compose",
             "lift",
             "is_none",
+            "make_tuple",
+            "nth",
             "reduce",
             "deref",
             "shift",

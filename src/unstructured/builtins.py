@@ -16,6 +16,8 @@ __all__ = [
     "mul",
     "div",
     "greater",
+    "make_tuple",
+    "nth",
 ]
 
 builtin_dispatch = Dispatcher()
@@ -99,3 +101,13 @@ def div(*args):
 @builtin_dispatch
 def greater(*args):
     raise BackendNotSelectedError()
+
+
+@builtin_dispatch
+def make_tuple(*args):
+    raise BackendNotSelectedError
+
+
+@builtin_dispatch
+def nth(*args):
+    raise BackendNotSelectedError

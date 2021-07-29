@@ -7,27 +7,56 @@ import pytest
 
 @fundef
 def tridiag_forward(state, a, b, c, d):
-    if is_none(state):
-        cp_k = deref(c) / deref(b)
-        dp_k = deref(d) / deref(b)
-    else:
-        cp_km1, dp_km1 = state
-        cp_k = deref(c) / (deref(b) - deref(a) * cp_km1)
-        dp_k = (deref(d) - deref(a) * dp_km1) / (deref(b) - deref(a) * cp_km1)
-    return cp_k, dp_k
+    # not tracable
+    # if is_none(state):
+    #     cp_k = deref(c) / deref(b)
+    #     dp_k = deref(d) / deref(b)
+    # else:
+    #     cp_km1, dp_km1 = state
+    #     cp_k = deref(c) / (deref(b) - deref(a) * cp_km1)
+    #     dp_k = (deref(d) - deref(a) * dp_km1) / (deref(b) - deref(a) * cp_km1)
+    # return make_tuple(cp_k, dp_k)
+
+    # variant a
+    # return if_(
+    #     is_none(state),
+    #     make_tuple(deref(c) / deref(b), deref(d) / deref(b)),
+    #     make_tuple(
+    #         deref(c) / (deref(b) - deref(a) * nth(0, state)),
+    #         (deref(d) - deref(a) * nth(1, state))
+    #         / (deref(b) - deref(a) * nth(0, state)),
+    #     ),
+    # )
+
+    # variant b
+    def initial():
+        return make_tuple(deref(c) / deref(b), deref(d) / deref(b))
+
+    def step():
+        return make_tuple(
+            deref(c) / (deref(b) - deref(a) * nth(0, state)),
+            (deref(d) - deref(a) * nth(1, state))
+            / (deref(b) - deref(a) * nth(0, state)),
+        )
+
+    return if_(is_none(state), initial, step)()
 
 
 @fundef
 def tridiag_backward(x_kp1, cp, dp):
-    if is_none(x_kp1):
-        x_k = deref(dp)
-    else:
-        x_k = deref(dp) - deref(cp) * x_kp1
-    return x_k
+    # if is_none(x_kp1):
+    #     x_k = deref(dp)
+    # else:
+    #     x_k = deref(dp) - deref(cp) * x_kp1
+    # return x_k
+    return if_(is_none(x_kp1), deref(dp), deref(dp) - deref(cp) * x_kp1)
 
 
+@fundef
 def solve_tridiag(a, b, c, d):
-    cp, dp = lift(scan(tridiag_forward, True, None))(a, b, c, d).unpack(2)
+    tup = lift(scan(tridiag_forward, True, None))(a, b, c, d)
+    cp = nth(0, tup)
+    dp = nth(1, tup)
     return scan(tridiag_backward, False, None)(cp, dp)
 
 
@@ -89,6 +118,8 @@ def test_tridiag(tridiag_reference):
         x_s,
         offset_provider={},
         column_axis=KDim,
+        backend="double_roundtrip",
+        # debug=True,
     )
 
     assert np.allclose(x, np.asarray(x_s))

@@ -75,10 +75,10 @@ def ksum_fencil(i_size, k_size, inp, out):
 
 def test_ksum_scan():
     shape = [1, 7]
-    inp = np_as_located_field(IDim, KDim)(np.ones(shape))
+    inp = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))]))
     out = np_as_located_field(IDim, KDim)(np.zeros(shape))
 
-    # ref = np.asarray(range(shape[1]))
+    ref = np.asarray([[0, 1, 3, 6, 10, 15, 21]])
 
     ksum_fencil(
         shape[0],
@@ -86,8 +86,41 @@ def test_ksum_scan():
         inp,
         out,
         offset_provider={"I": IDim, "K": KDim},
-        # backend="embedded",
-        debug=True,
+        backend="double_roundtrip",
     )
 
-    # assert np.allclose(ref, out)
+    assert np.allclose(ref, np.asarray(out))
+
+
+@fundef
+def ksum_back(inp):
+    return scan(sum_scanpass, False, None)(inp)
+
+
+@fendef(column_axis=KDim)
+def ksum_back_fencil(i_size, k_size, inp, out):
+    closure(
+        domain(named_range(IDim, 0, i_size), named_range(KDim, 0, k_size)),
+        ksum_back,
+        [out],
+        [inp],
+    )
+
+
+def test_ksum_back_scan():
+    shape = [1, 7]
+    inp = np_as_located_field(IDim, KDim)(np.asarray([list(range(7))]))
+    out = np_as_located_field(IDim, KDim)(np.zeros(shape))
+
+    ref = np.asarray([[21, 21, 20, 18, 15, 11, 6]])
+
+    ksum_back_fencil(
+        shape[0],
+        shape[1],
+        inp,
+        out,
+        offset_provider={"I": IDim, "K": KDim},
+        backend="double_roundtrip",
+    )
+
+    assert np.allclose(ref, np.asarray(out))

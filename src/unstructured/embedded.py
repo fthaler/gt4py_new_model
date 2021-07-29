@@ -18,6 +18,8 @@ from unstructured.builtins import (
     mul,
     div,
     greater,
+    nth,
+    make_tuple,
 )
 from unstructured.runtime import CartesianAxis, Offset
 from unstructured.utils import tupelize
@@ -45,6 +47,16 @@ def if_(cond, t, f):
     return t if cond else f
 
 
+@nth.register(EMBEDDED)
+def nth(i, tup):
+    return tup[i]
+
+
+@make_tuple.register(EMBEDDED)
+def make_tuple(*args):
+    return (*args,)
+
+
 @lift.register(EMBEDDED)
 def lift(stencil):
     def impl(*args):
@@ -52,20 +64,13 @@ def lift(stencil):
             def __init__(self, *, offsets=[], elem=None) -> None:
                 self.offsets = offsets
                 self.elem = elem
-                self.elem_pos = 0
 
-            def unpack(self, num):
-                if self.elem is None:
-                    for _ in range(num):
-                        self.elem_pos = self.elem_pos + 1
-                        yield wrap_iterator(
-                            offsets=self.offsets, elem=self.elem_pos - 1
-                        )
-                else:
-                    assert False
+            # TODO needs to be supported by all iterators that represent tuples
+            def __getitem__(self, index):
+                return wrap_iterator(offsets=self.offsets, elem=index)
 
             def shift(self, *offsets):
-                return wrap_iterator(offsets=[*offsets, *self.offsets])
+                return wrap_iterator(offsets=[*offsets, *self.offsets], elem=self.elem)
 
             def max_neighbors(self):
                 # TODO cleanup, test edge cases
@@ -121,7 +126,6 @@ def lift(stencil):
                 if self.elem is None:
                     return stencil(*shifted_args)
                 else:
-                    print(len(stencil(*shifted_args)))
                     return stencil(*shifted_args)[self.elem]
 
         return wrap_iterator()
@@ -157,8 +161,41 @@ def reduce(fun, init):
 
 
 class _None:
+    """Dummy object to allow execution of expression containing Nones in non-active path
+
+    E.g.
+    `if_(is_none(state), 42, 42+state)`
+    here 42+state needs to be evaluatable even if is_none(state)
+
+    TODO: all possible arithmetic operations
+    """
+
     def __add__(self, other):
-        ...
+        return _None()
+
+    def __radd__(self, other):
+        return _None()
+
+    def __sub__(self, other):
+        return _None()
+
+    def __rsub__(self, other):
+        return _None()
+
+    def __mul__(self, other):
+        return _None()
+
+    def __rmul__(self, other):
+        return _None()
+
+    def __truediv__(self, other):
+        return _None()
+
+    def __rtruediv__(self, other):
+        return _None()
+
+    def __getitem__(self, i):
+        return _None()
 
 
 @is_none.register(EMBEDDED)
@@ -474,15 +511,23 @@ class Column:
 
 
 class ScanArgIterator:
-    def __init__(self, wrapped_iter, *, offsets=[]) -> None:
+    def __init__(self, wrapped_iter, k_pos, *, offsets=[]) -> None:
         self.wrapped_iter = wrapped_iter
         self.offsets = offsets
+        self.k_pos = k_pos
 
     def deref(self):
-        return self.wrapped_iter.deref()[0]
+        return self.wrapped_iter.deref()[self.k_pos]
 
     def shift(self, *offsets):
         return ScanArgIterator(self.wrapped_iter, offsets=[*offsets, *self.offsets])
+
+
+def shifted_scan_arg(k_pos):
+    def impl(iter):
+        return ScanArgIterator(iter, k_pos=k_pos)
+
+    return impl
 
 
 def fendef_embedded(fun, *args, **kwargs):
@@ -509,20 +554,21 @@ def fendef_embedded(fun, *args, **kwargs):
                 if not is_forward:
                     _range = reversed(_range)
 
-                _init = init
-                if _init is None:
-                    _init = _None()
-                state = _init
+                state = init
+                if state is None:
+                    state = _None()
                 cols = []
-                for _ in _range:
+                for i in _range:
                     state = scan_pass(
-                        state, *map(ScanArgIterator, iters)
+                        state, *map(shifted_scan_arg(i), iters)
                     )  # more generic scan returns state and result as 2 different things
                     cols.append([*tupelize(state)])
 
-                cols = tuple(
-                    map(np.asarray, (map(list, zip(*cols))))
-                )  # transpose to get tuple of columns as np array
+                cols = tuple(map(np.asarray, (map(list, zip(*cols)))))
+                # transpose to get tuple of columns as np array
+
+                if not is_forward:
+                    cols = tuple(map(np.flip, cols))
                 return cols
 
             return impl
@@ -530,7 +576,10 @@ def fendef_embedded(fun, *args, **kwargs):
         for pos in domain_iterator(domain):
             ins_iters = list(
                 make_in_iterator(
-                    inp, pos, kwargs["offset_provider"], column_axis=column.axis
+                    inp,
+                    pos,
+                    kwargs["offset_provider"],
+                    column_axis=column.axis if column is not None else None,
                 )
                 for inp in ins
             )
