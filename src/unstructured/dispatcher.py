@@ -1,5 +1,7 @@
 from typing import Any
 
+# TODO test
+
 
 class _fun_dispatcher:
     def __init__(self, dispatcher, fun) -> None:
@@ -52,37 +54,3 @@ class Dispatcher:
 
     def dispatch(self, fun):
         return _fun_dispatcher(self, fun)
-
-
-# @dispatch
-# def foo():
-#     print("foo")
-
-
-# @foo.register("tracing")
-# def bar():
-#     print("bar")
-
-
-# @foo.register("other")
-# def baz():
-#     print("baz")
-
-
-# # def foo():
-# #     ...
-
-
-# print(dispatch.__name__)
-# print(foo.__name__)
-
-
-# foo()
-# Dispatcher.push_key("tracing")
-# foo()
-# Dispatcher.push_key("other")
-# foo()
-# Dispatcher.pop_key()
-# foo()
-# Dispatcher.clear_key()
-# foo()

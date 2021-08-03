@@ -1,11 +1,5 @@
-import functools
-
-from numpy import isin
 from unstructured.runtime import CartesianAxis
-from typing import Any
-from typing_extensions import runtime
 from eve import Node
-from devtools import debug
 import inspect
 from unstructured.backend_executor import execute_program
 import unstructured.builtins
@@ -24,11 +18,12 @@ from unstructured.ir import (
     OffsetLiteral,
     Program,
     StencilClosure,
-    StringLiteral,
     Sym,
     SymRef,
 )
 from unstructured.backends import backend
+
+TRACING = "tracing"
 
 
 def monkeypatch_method(cls):
@@ -105,63 +100,63 @@ def _f(fun, *args):
 
 
 # builtins
-@unstructured.builtins.deref.register("tracing")
+@unstructured.builtins.deref.register(TRACING)
 def deref(arg):
     return _f("deref", arg)
 
 
-@unstructured.builtins.lift.register("tracing")
+@unstructured.builtins.lift.register(TRACING)
 def lift(sten):
     return _f("lift", sten)
 
 
-@unstructured.builtins.reduce.register("tracing")
+@unstructured.builtins.reduce.register(TRACING)
 def reduce(*args):
     return _f("reduce", *args)
 
 
-@unstructured.builtins.scan.register("tracing")
+@unstructured.builtins.scan.register(TRACING)
 def scan(*args):
     return _f("scan", *args)
 
 
-@unstructured.builtins.is_none.register("tracing")
+@unstructured.builtins.is_none.register(TRACING)
 def is_none(*args):
     return _f("is_none", *args)
 
 
-@unstructured.builtins.make_tuple.register("tracing")
+@unstructured.builtins.make_tuple.register(TRACING)
 def make_tuple(*args):
     return _f("make_tuple", *args)
 
 
-@unstructured.builtins.nth.register("tracing")
+@unstructured.builtins.nth.register(TRACING)
 def nth(*args):
     return _f("nth", *args)
 
 
-@unstructured.builtins.compose.register("tracing")
+@unstructured.builtins.compose.register(TRACING)
 def compose(*args):
     return _f("compose", *args)
 
 
-@unstructured.builtins.domain.register("tracing")
+@unstructured.builtins.domain.register(TRACING)
 def domain(*args):
     return _f("domain", *args)
 
 
-@unstructured.builtins.named_range.register("tracing")
+@unstructured.builtins.named_range.register(TRACING)
 def named_range(*args):
     return _f("named_range", *args)
 
 
-@unstructured.builtins.if_.register("tracing")
+@unstructured.builtins.if_.register(TRACING)
 def if_(*args):
     return _f("if_", *args)
 
 
 # shift promotes its arguments to literals, therefore special
-@unstructured.builtins.shift.register("tracing")
+@unstructured.builtins.shift.register(TRACING)
 def shift(*offsets):
     offsets = tuple(
         OffsetLiteral(value=o) if isinstance(o, (str, int)) else o for o in offsets
@@ -169,27 +164,27 @@ def shift(*offsets):
     return _f("shift", *offsets)
 
 
-@unstructured.builtins.plus.register("tracing")
+@unstructured.builtins.plus.register(TRACING)
 def plus(*args):
     return _f("plus", *args)
 
 
-@unstructured.builtins.minus.register("tracing")
+@unstructured.builtins.minus.register(TRACING)
 def minus(*args):
     return _f("minus", *args)
 
 
-@unstructured.builtins.mul.register("tracing")
+@unstructured.builtins.mul.register(TRACING)
 def mul(*args):
     return _f("mul", *args)
 
 
-@unstructured.builtins.div.register("tracing")
+@unstructured.builtins.div.register(TRACING)
 def div(*args):
     return _f("div", *args)
 
 
-@unstructured.builtins.greater.register("tracing")
+@unstructured.builtins.greater.register(TRACING)
 def greater(*args):
     return _f("greater", *args)
 
@@ -257,7 +252,7 @@ class FundefTracer:
         return fun
 
     def __bool__(self):
-        return unstructured.builtins.builtin_dispatch.key == "tracing"
+        return unstructured.builtins.builtin_dispatch.key == TRACING
 
 
 unstructured.runtime.FundefDispatcher.register_tracing_hook(FundefTracer())
@@ -277,7 +272,7 @@ class Tracer:
         cls.closures.append(closure)
 
     def __enter__(self):
-        unstructured.builtins.builtin_dispatch.push_key("tracing")
+        unstructured.builtins.builtin_dispatch.push_key(TRACING)
 
     def __exit__(self, exc_type, exc_value, exc_traceback):
         type(self).fundefs = []
@@ -285,7 +280,7 @@ class Tracer:
         unstructured.builtins.builtin_dispatch.pop_key()
 
 
-@unstructured.runtime.closure.register("tracing")
+@unstructured.runtime.closure.register(TRACING)
 def closure(domain, stencil, outputs, inputs):
     stencil(*list(_s(param) for param in inspect.signature(stencil).parameters.keys()))
     Tracer.add_closure(
