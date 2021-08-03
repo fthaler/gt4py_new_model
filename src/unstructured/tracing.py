@@ -255,7 +255,7 @@ class FundefTracer:
         return unstructured.builtins.builtin_dispatch.key == TRACING
 
 
-unstructured.runtime.FundefDispatcher.register_tracing_hook(FundefTracer())
+unstructured.runtime.FundefDispatcher.register_hook(FundefTracer())
 
 
 class Tracer:

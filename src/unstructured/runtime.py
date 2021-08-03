@@ -71,7 +71,7 @@ class FundefDispatcher:
             return self.fun(*args)
 
     @classmethod
-    def register_tracing_hook(cls, hook):
+    def register_hook(cls, hook):
         cls._hook = hook
 
 
